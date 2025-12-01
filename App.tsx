@@ -18,13 +18,13 @@ enum Tab {
 }
 
 const App: React.FC = () => {
+  const [activeTab, setActiveTab] = useState<Tab>(Tab.SALES);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+
   // Debug: Verificar se o componente está sendo renderizado
   React.useEffect(() => {
     console.log('✅ App component montado com sucesso');
   }, []);
-
-  const [activeTab, setActiveTab] = useState<Tab>(Tab.SALES);
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   const menuItems = [
     { id: Tab.SALES, label: 'Minhas Vendas', icon: LayoutDashboard },

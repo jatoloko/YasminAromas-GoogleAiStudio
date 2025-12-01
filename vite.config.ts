@@ -27,10 +27,7 @@ export default defineConfig(({ mode }) => {
         sourcemap: false,
         rollupOptions: {
           output: {
-            manualChunks: {
-              'react-vendor': ['react', 'react-dom'],
-              'ui-vendor': ['lucide-react', 'recharts'],
-            }
+            manualChunks: undefined, // Desabilitar code splitting para evitar problemas de inicialização
           }
         }
       }

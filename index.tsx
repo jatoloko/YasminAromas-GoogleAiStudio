@@ -30,13 +30,11 @@ try {
   const root = ReactDOM.createRoot(rootElement);
   
   root.render(
-    <React.StrictMode>
-      <ErrorBoundary>
-        <ToastProvider>
-          <App />
-        </ToastProvider>
-      </ErrorBoundary>
-    </React.StrictMode>
+    <ErrorBoundary>
+      <ToastProvider>
+        <App />
+      </ToastProvider>
+    </ErrorBoundary>
   );
   
   console.log('✅ Aplicação renderizada com sucesso!');
