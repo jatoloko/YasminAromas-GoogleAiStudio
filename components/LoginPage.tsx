@@ -1,14 +1,17 @@
 import React, { useState } from 'react';
-import { LogIn, UserPlus, User, Lock, Eye, EyeOff } from 'lucide-react';
+import { LogIn, UserPlus, User, Lock, Eye, EyeOff, Mail } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
+import { validateAuth } from '../utils/validation';
 
 const LoginPage: React.FC = () => {
   const [isLogin, setIsLogin] = useState(true);
   const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [formErrors, setFormErrors] = useState<{ username?: string; password?: string; email?: string }>({});
   
   const { signIn, signUp } = useAuth();
   const toast = useToast();
@@ -16,37 +19,53 @@ const LoginPage: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!username || !password) {
-      toast.showError('Por favor, preencha todos os campos.');
-      return;
+    const errors: { username?: string; password?: string; email?: string } = {};
+
+    const emailValidation = validateAuth.email(email);
+    if (!emailValidation.isValid) {
+      errors.email = emailValidation.error || '';
     }
 
-    if (!isLogin && username.length < 3) {
-      toast.showError('Username deve ter pelo menos 3 caracteres.');
-      return;
+    const passwordValidation = validateAuth.password(password);
+    if (!passwordValidation.isValid) {
+      errors.password = passwordValidation.error || '';
     }
 
-    if (password.length < 6) {
-      toast.showError('A senha deve ter pelo menos 6 caracteres.');
+    if (!isLogin) {
+      const usernameValidation = validateAuth.username(username);
+      if (!usernameValidation.isValid) {
+        errors.username = usernameValidation.error || '';
+      }
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors);
+      toast.showError('Por favor, corrija os erros antes de continuar.');
       return;
     }
 
     setLoading(true);
+    setFormErrors({});
 
     try {
       if (isLogin) {
-        const { error } = await signIn(username, password);
+        const { error } = await signIn(email, password);
         if (error) {
           toast.showError(error);
         } else {
           toast.showSuccess('Login realizado com sucesso!');
+          setPassword('');
         }
       } else {
-        const { error } = await signUp(username, password);
+        const { error, message } = await signUp(username, email, password);
         if (error) {
           toast.showError(error);
         } else {
-          toast.showSuccess('Conta criada com sucesso!');
+          toast.showSuccess(message || 'Conta criada com sucesso!');
+          setIsLogin(true);
+          setUsername('');
+          setEmail('');
+          setPassword('');
         }
       }
     } catch (error) {
@@ -75,7 +94,10 @@ const LoginPage: React.FC = () => {
         {/* Tabs */}
         <div className="flex border-b border-gray-200">
           <button
-            onClick={() => setIsLogin(true)}
+            onClick={() => {
+              setIsLogin(true);
+              setFormErrors({});
+            }}
             className={`flex-1 py-4 px-4 text-center font-medium transition-colors ${
               isLogin
                 ? 'text-brand-600 border-b-2 border-brand-600 bg-brand-50'
@@ -88,7 +110,10 @@ const LoginPage: React.FC = () => {
             </div>
           </button>
           <button
-            onClick={() => setIsLogin(false)}
+            onClick={() => {
+              setIsLogin(false);
+              setFormErrors({});
+            }}
             className={`flex-1 py-4 px-4 text-center font-medium transition-colors ${
               !isLogin
                 ? 'text-brand-600 border-b-2 border-brand-600 bg-brand-50'
@@ -104,7 +129,8 @@ const LoginPage: React.FC = () => {
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="p-8 space-y-6">
-          <div>
+          {isLogin ? null : (
+            <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Nome de Usuário
             </label>
@@ -123,10 +149,39 @@ const LoginPage: React.FC = () => {
                 minLength={3}
               />
             </div>
+            {formErrors.username && (
+              <p className="mt-2 text-xs text-red-500">{formErrors.username}</p>
+            )}
             {!isLogin && (
               <p className="mt-2 text-xs text-gray-500">
                 Mínimo 3 caracteres, apenas letras, números e underscore
               </p>
+            )}
+          </div>
+          )}
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              E-mail
+            </label>
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <Mail className="h-5 w-5 text-gray-400" />
+              </div>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-colors ${
+                  formErrors.email ? 'border-red-500' : 'border-gray-300'
+                }`}
+                placeholder="seuemail@exemplo.com"
+                required
+                disabled={loading}
+              />
+            </div>
+            {formErrors.email && (
+              <p className="mt-2 text-xs text-red-500">{formErrors.email}</p>
             )}
           </div>
 
@@ -142,7 +197,9 @@ const LoginPage: React.FC = () => {
                 type={showPassword ? 'text' : 'password'}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full pl-10 pr-12 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-colors"
+                className={`w-full pl-10 pr-12 py-3 border rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-colors ${
+                  formErrors.password ? 'border-red-500' : 'border-gray-300'
+                }`}
                 placeholder="••••••••"
                 required
                 disabled={loading}
@@ -156,9 +213,13 @@ const LoginPage: React.FC = () => {
                 {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
               </button>
             </div>
-            <p className="mt-2 text-xs text-gray-500">
-              A senha deve ter pelo menos 6 caracteres
-            </p>
+            {formErrors.password ? (
+              <p className="mt-2 text-xs text-red-500">{formErrors.password}</p>
+            ) : (
+              <p className="mt-2 text-xs text-gray-500">
+                A senha deve ter pelo menos 6 caracteres
+              </p>
+            )}
           </div>
 
           <button
@@ -182,7 +243,10 @@ const LoginPage: React.FC = () => {
           <p className="text-xs text-gray-500">
             {isLogin ? 'Não tem uma conta? ' : 'Já tem uma conta? '}
             <button
-              onClick={() => setIsLogin(!isLogin)}
+              onClick={() => {
+                setIsLogin(!isLogin);
+                setFormErrors({});
+              }}
               className="text-brand-600 hover:text-brand-700 font-medium"
             >
               {isLogin ? 'Registre-se' : 'Faça login'}

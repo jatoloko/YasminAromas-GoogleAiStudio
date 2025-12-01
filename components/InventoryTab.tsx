@@ -1,10 +1,12 @@
-import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, AlertTriangle, Package, X, Edit2, Search, Filter } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Plus, Trash2, AlertTriangle, Package, X, Edit2, Search, Filter, Loader, Info } from 'lucide-react';
 import { InventoryItem, UnitType } from '../types';
-import { StorageService } from '../services/storageService';
+import { StorageService, isSupabaseUnavailableError } from '../services/storageService';
 import { useToast } from '../contexts/ToastContext';
 import { useAuth } from '../contexts/AuthContext';
-import { generateUUID } from '../utils/uuid';
+import { validateInventory } from '../utils/validation';
+import { ListSkeleton } from './Skeleton';
+import ConfirmDialog from './ConfirmDialog';
 
 const InventoryTab: React.FC = () => {
   const toast = useToast();
@@ -21,69 +23,140 @@ const InventoryTab: React.FC = () => {
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterCategory, setFilterCategory] = useState<string>('all');
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const [supabaseUnavailable, setSupabaseUnavailable] = useState(false);
+  const [supabaseMessage, setSupabaseMessage] = useState<string | null>(null);
+  const supabaseWarningShown = useRef(false);
+  const [itemToDelete, setItemToDelete] = useState<InventoryItem | null>(null);
 
   useEffect(() => {
     if (!user?.id) return;
     
     const loadData = async () => {
-      const data = await StorageService.getInventory(user.id);
-      setItems(data);
+      try {
+        setIsLoading(true);
+        const data = await StorageService.getInventory(user.id);
+        setItems(data);
+        setSupabaseUnavailable(false);
+        setSupabaseMessage(null);
+        supabaseWarningShown.current = false;
+      } catch (error) {
+        console.error('Erro ao carregar inventário:', error);
+        if (isSupabaseUnavailableError(error)) {
+          setItems([]);
+          setSupabaseUnavailable(true);
+          const message = 'Supabase não está configurado ou está indisponível. Seus dados não serão sincronizados.';
+          setSupabaseMessage(message);
+          if (!supabaseWarningShown.current) {
+            toast.showWarning(message);
+            supabaseWarningShown.current = true;
+          }
+        } else {
+          toast.showError('Erro ao carregar itens de estoque.');
+        }
+      } finally {
+        setIsLoading(false);
+      }
     };
     loadData();
   }, [user?.id]);
 
   const handleAddItem = async () => {
-    if (!newItem.name || newItem.quantity === undefined) return;
+    const errors: Record<string, string> = {};
 
-    const normalizedName = newItem.name.trim();
-    const category = newItem.category || 'Geral';
-
-    // Check if item exists
-    const existingItemIndex = items.findIndex(
-      i => i.name.toLowerCase() === normalizedName.toLowerCase() && i.category === category
-    );
-
-    let updatedItems;
-
-    if (existingItemIndex >= 0) {
-      // Update existing item
-      updatedItems = [...items];
-      updatedItems[existingItemIndex] = {
-        ...updatedItems[existingItemIndex],
-        quantity: updatedItems[existingItemIndex].quantity + Number(newItem.quantity)
-      };
-    } else {
-      // Add new item
-      const itemToAdd: InventoryItem = {
-        id: generateUUID(),
-        name: normalizedName,
-        category: category,
-        quantity: Number(newItem.quantity),
-        unit: newItem.unit || UnitType.UNITS,
-        minThreshold: Number(newItem.minThreshold) || 0,
-      };
-      updatedItems = [...items, itemToAdd];
+    const nameValidation = validateInventory.name(newItem.name || '');
+    if (!nameValidation.isValid) {
+      errors.name = nameValidation.error || '';
     }
 
-    setItems(updatedItems);
-    if (user?.id) {
-      await StorageService.saveInventory(updatedItems, user.id);
-      toast.showSuccess(existingItemIndex >= 0 ? 'Item atualizado com sucesso!' : 'Item adicionado com sucesso!');
+    const quantityValidation = validateInventory.quantity(newItem.quantity ?? '');
+    if (!quantityValidation.isValid) {
+      errors.quantity = quantityValidation.error || '';
     }
-    
-    // Reset form
-    setNewItem({ name: '', category: 'Cera', quantity: 0, unit: UnitType.KILOGRAMS, minThreshold: 1 });
-    setIsCustomCategory(false);
+
+    const minValidation = validateInventory.minThreshold(newItem.minThreshold ?? '');
+    if (!minValidation.isValid) {
+      errors.minThreshold = minValidation.error || '';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors);
+      toast.showError('Por favor, corrija os erros antes de salvar.');
+      return;
+    }
+
+    if (!user?.id) {
+      toast.showError('Usuário não autenticado.');
+      return;
+    }
+
+    try {
+      setIsSaving(true);
+      const normalizedName = newItem.name!.trim();
+      const category = newItem.category || 'Geral';
+
+      // Check if item exists
+      const existingItemIndex = items.findIndex(
+        i => i.name.toLowerCase() === normalizedName.toLowerCase() && i.category === category
+      );
+
+      let updatedItems: InventoryItem[];
+
+      if (existingItemIndex >= 0) {
+        // Update existing item
+        updatedItems = [...items];
+        updatedItems[existingItemIndex] = {
+          ...updatedItems[existingItemIndex],
+          quantity: updatedItems[existingItemIndex].quantity + Number(newItem.quantity)
+        };
+      } else {
+        // Add new item
+        const itemToAdd: InventoryItem = {
+          id: generateUUID(),
+          name: normalizedName,
+          category: category,
+          quantity: Number(newItem.quantity),
+          unit: newItem.unit || UnitType.UNITS,
+          minThreshold: Number(newItem.minThreshold) || 0,
+        };
+        updatedItems = [...items, itemToAdd];
+      }
+
+      setItems(updatedItems);
+      const saved = await StorageService.saveInventory(updatedItems, user.id);
+      if (saved) {
+        toast.showSuccess(existingItemIndex >= 0 ? 'Item atualizado com sucesso!' : 'Item adicionado com sucesso!');
+      } else {
+        toast.showError('Não foi possível salvar no Supabase.');
+      }
+      
+      // Reset form
+      setNewItem({ name: '', category: 'Cera', quantity: 0, unit: UnitType.KILOGRAMS, minThreshold: 1 });
+      setIsCustomCategory(false);
+      setFormErrors({});
+    } catch (error) {
+      console.error('Erro ao salvar item:', error);
+      toast.showError('Erro ao salvar item. Tente novamente.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
-  const handleDeleteItem = async (id: string) => {
-    if (!confirm('Tem certeza que deseja excluir este item?')) return;
-    const updatedItems = items.filter(i => i.id !== id);
+  const handleDeleteItem = async () => {
+    if (!itemToDelete) return;
+    const updatedItems = items.filter(i => i.id !== itemToDelete.id);
     setItems(updatedItems);
     if (user?.id) {
-      await StorageService.saveInventory(updatedItems, user.id);
-      toast.showSuccess('Item excluído com sucesso!');
+      const saved = await StorageService.saveInventory(updatedItems, user.id);
+      if (saved) {
+        toast.showSuccess('Item excluído com sucesso!');
+      } else {
+        toast.showError('Não foi possível excluir o item no Supabase.');
+      }
     }
+    setItemToDelete(null);
   };
 
   const handleEditItem = (item: InventoryItem) => {
@@ -98,35 +171,72 @@ const InventoryTab: React.FC = () => {
   };
 
   const handleUpdateItem = async () => {
-    if (!editingItem || !newItem.name || newItem.quantity === undefined) return;
+    if (!editingItem) return;
 
-    const updatedItems = items.map(item =>
-      item.id === editingItem.id
-        ? {
-            ...item,
-            name: newItem.name!,
-            category: newItem.category || 'Geral',
-            quantity: Number(newItem.quantity),
-            unit: newItem.unit || UnitType.UNITS,
-            minThreshold: Number(newItem.minThreshold) || 0,
-          }
-        : item
-    );
-
-    setItems(updatedItems);
-    if (user?.id) {
-      await StorageService.saveInventory(updatedItems, user.id);
-      toast.showSuccess('Item atualizado com sucesso!');
+    const errors: Record<string, string> = {};
+    const nameValidation = validateInventory.name(newItem.name || '');
+    if (!nameValidation.isValid) {
+      errors.name = nameValidation.error || '';
     }
-    setEditingItem(null);
-    setNewItem({ name: '', category: 'Cera', quantity: 0, unit: UnitType.KILOGRAMS, minThreshold: 1 });
-    setIsCustomCategory(false);
+    const quantityValidation = validateInventory.quantity(newItem.quantity ?? '');
+    if (!quantityValidation.isValid) {
+      errors.quantity = quantityValidation.error || '';
+    }
+    const minValidation = validateInventory.minThreshold(newItem.minThreshold ?? '');
+    if (!minValidation.isValid) {
+      errors.minThreshold = minValidation.error || '';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors);
+      toast.showError('Por favor, corrija os erros antes de salvar.');
+      return;
+    }
+
+    if (!user?.id) {
+      toast.showError('Usuário não autenticado.');
+      return;
+    }
+
+    try {
+      setIsSaving(true);
+      const updatedItems = items.map(item =>
+        item.id === editingItem.id
+          ? {
+              ...item,
+              name: newItem.name!,
+              category: newItem.category || 'Geral',
+              quantity: Number(newItem.quantity),
+              unit: newItem.unit || UnitType.UNITS,
+              minThreshold: Number(newItem.minThreshold) || 0,
+            }
+          : item
+      );
+
+      setItems(updatedItems);
+      const saved = await StorageService.saveInventory(updatedItems, user.id);
+      if (saved) {
+        toast.showSuccess('Item atualizado com sucesso!');
+      } else {
+        toast.showError('Não foi possível atualizar o item no Supabase.');
+      }
+      setEditingItem(null);
+      setNewItem({ name: '', category: 'Cera', quantity: 0, unit: UnitType.KILOGRAMS, minThreshold: 1 });
+      setIsCustomCategory(false);
+      setFormErrors({});
+    } catch (error) {
+      console.error('Erro ao atualizar item:', error);
+      toast.showError('Erro ao atualizar item.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleCancelEdit = () => {
     setEditingItem(null);
     setNewItem({ name: '', category: 'Cera', quantity: 0, unit: UnitType.KILOGRAMS, minThreshold: 1 });
     setIsCustomCategory(false);
+    setFormErrors({});
   };
 
   const getLowStockItems = () => items.filter(i => i.quantity <= i.minThreshold);
@@ -145,19 +255,37 @@ const InventoryTab: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      {supabaseUnavailable && supabaseMessage && (
+        <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 px-4 py-3 rounded-lg flex items-start gap-3">
+          <Info className="w-5 h-5 mt-0.5" />
+          <div>
+            <p className="font-semibold">Modo offline</p>
+            <p className="text-sm">{supabaseMessage} Consulte o arquivo SUPABASE_SETUP.md para configurar.</p>
+          </div>
+        </div>
+      )}
       <div className="bg-white p-6 rounded-xl shadow-sm border border-brand-100">
         <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
           <Package className="text-brand-500" />
           {editingItem ? 'Editar Item' : 'Adicionar Novo Item'}
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-          <input
-            type="text"
-            placeholder="Nome do Item (ex: Cera de Coco)"
-            className="bg-white text-gray-900 border border-gray-300 p-2 rounded-lg focus:ring-2 focus:ring-brand-400 outline-none lg:col-span-2"
-            value={newItem.name}
-            onChange={e => setNewItem({ ...newItem, name: e.target.value })}
-          />
+          <div className="lg:col-span-2">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Nome do Item <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              placeholder="Nome do Item (ex: Cera de Coco)"
+              className={`bg-white text-gray-900 border p-2 rounded-lg focus:ring-2 focus:ring-brand-400 outline-none w-full ${formErrors.name ? 'border-red-500' : 'border-gray-300'}`}
+              value={newItem.name}
+              onChange={e => {
+                setNewItem({ ...newItem, name: e.target.value });
+                setFormErrors({ ...formErrors, name: '' });
+              }}
+            />
+            {formErrors.name && <p className="text-red-500 text-xs mt-1">{formErrors.name}</p>}
+          </div>
           
           {/* Category Selection Logic */}
           {isCustomCategory ? (
@@ -201,31 +329,59 @@ const InventoryTab: React.FC = () => {
             </select>
           )}
 
-          <div className="flex gap-2">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Quantidade <span className="text-red-500">*</span>
+            </label>
+            <div className="flex gap-2">
+              <input
+                type="number"
+                placeholder="Qtd"
+                className={`bg-white text-gray-900 border p-2 rounded-lg w-full focus:ring-2 focus:ring-brand-400 outline-none ${formErrors.quantity ? 'border-red-500' : 'border-gray-300'}`}
+                value={newItem.quantity}
+                onChange={e => {
+                  setNewItem({ ...newItem, quantity: parseFloat(e.target.value) });
+                  setFormErrors({ ...formErrors, quantity: '' });
+                }}
+              />
+              <select
+                className="bg-white text-gray-900 border border-gray-300 p-2 rounded-lg focus:ring-2 focus:ring-brand-400 outline-none"
+                value={newItem.unit}
+                onChange={e => setNewItem({ ...newItem, unit: e.target.value as UnitType })}
+              >
+                {Object.values(UnitType).map(u => (
+                  <option key={u} value={u}>{u}</option>
+                ))}
+              </select>
+            </div>
+            {formErrors.quantity && <p className="text-red-500 text-xs mt-1">{formErrors.quantity}</p>}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Estoque mínimo (alerta)
+            </label>
             <input
               type="number"
-              placeholder="Qtd"
-              className="bg-white text-gray-900 border border-gray-300 p-2 rounded-lg w-full focus:ring-2 focus:ring-brand-400 outline-none"
-              value={newItem.quantity}
-              onChange={e => setNewItem({ ...newItem, quantity: parseFloat(e.target.value) })}
+              placeholder="Ex: 2"
+              className={`bg-white text-gray-900 border p-2 rounded-lg w-full focus:ring-2 focus:ring-brand-400 outline-none ${formErrors.minThreshold ? 'border-red-500' : 'border-gray-300'}`}
+              value={newItem.minThreshold}
+              onChange={e => {
+                setNewItem({ ...newItem, minThreshold: parseFloat(e.target.value) });
+                setFormErrors({ ...formErrors, minThreshold: '' });
+              }}
             />
-            <select
-              className="bg-white text-gray-900 border border-gray-300 p-2 rounded-lg focus:ring-2 focus:ring-brand-400 outline-none"
-              value={newItem.unit}
-              onChange={e => setNewItem({ ...newItem, unit: e.target.value as UnitType })}
-            >
-              {Object.values(UnitType).map(u => (
-                <option key={u} value={u}>{u}</option>
-              ))}
-            </select>
+            {formErrors.minThreshold && <p className="text-red-500 text-xs mt-1">{formErrors.minThreshold}</p>}
           </div>
           {editingItem ? (
             <>
               <button
                 onClick={handleUpdateItem}
-                className="bg-green-500 text-white p-2 rounded-lg hover:bg-green-600 transition-colors flex items-center justify-center gap-2 font-medium"
+                disabled={isSaving}
+                className="bg-green-500 text-white p-2 rounded-lg hover:bg-green-600 transition-colors flex items-center justify-center gap-2 font-medium disabled:opacity-70 disabled:cursor-not-allowed"
               >
-                <Edit2 size={18} /> Salvar
+                {isSaving ? <Loader size={18} className="animate-spin" /> : <Edit2 size={18} />}
+                {isSaving ? 'Salvando...' : 'Salvar'}
               </button>
               <button
                 onClick={handleCancelEdit}
@@ -237,9 +393,18 @@ const InventoryTab: React.FC = () => {
           ) : (
             <button
               onClick={handleAddItem}
-              className="bg-brand-500 text-white p-2 rounded-lg hover:bg-brand-600 transition-colors flex items-center justify-center gap-2 font-medium"
+              disabled={isSaving}
+              className="bg-brand-500 text-white p-2 rounded-lg hover:bg-brand-600 transition-colors flex items-center justify-center gap-2 font-medium disabled:opacity-70 disabled:cursor-not-allowed"
             >
-              <Plus size={18} /> Adicionar
+              {isSaving ? (
+                <>
+                  <Loader size={18} className="animate-spin" /> Salvando...
+                </>
+              ) : (
+                <>
+                  <Plus size={18} /> Adicionar
+                </>
+              )}
             </button>
           )}
         </div>
@@ -286,7 +451,12 @@ const InventoryTab: React.FC = () => {
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-brand-100 overflow-hidden">
-        <table className="min-w-full divide-y divide-gray-200">
+        {isLoading ? (
+          <div className="p-6">
+            <ListSkeleton items={5} />
+          </div>
+        ) : (
+          <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-brand-50">
             <tr>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item</th>
@@ -336,7 +506,7 @@ const InventoryTab: React.FC = () => {
                         <Edit2 size={18} />
                       </button>
                       <button
-                        onClick={() => handleDeleteItem(item.id)}
+                        onClick={() => setItemToDelete(item)}
                         className="text-red-400 hover:text-red-600 transition-colors"
                         title="Excluir"
                       >
@@ -348,8 +518,17 @@ const InventoryTab: React.FC = () => {
               ))
             )}
           </tbody>
-        </table>
+          </table>
+        )}
       </div>
+      <ConfirmDialog
+        open={!!itemToDelete}
+        title="Excluir item"
+        description={`Tem certeza que deseja excluir "${itemToDelete?.name}" do estoque? Esta ação não pode ser desfeita.`}
+        confirmLabel="Excluir"
+        onConfirm={handleDeleteItem}
+        onCancel={() => setItemToDelete(null)}
+      />
     </div>
   );
 };

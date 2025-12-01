@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Sparkles, Send, Bot, User } from 'lucide-react';
 import { generateCreativeContent } from '../services/geminiService';
+import { useToast } from '../contexts/ToastContext';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -8,6 +9,7 @@ interface Message {
 }
 
 const AIAssistantTab: React.FC = () => {
+  const toast = useToast();
   const [messages, setMessages] = useState<Message[]>([
     { role: 'assistant', content: 'Olá! Sou seu assistente criativo da YasminAromas. Posso ajudar com ideias de nomes para velas, descrições para Instagram, ou dúvidas sobre produção. Como posso ajudar hoje?' }
   ]);
@@ -17,15 +19,21 @@ const AIAssistantTab: React.FC = () => {
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
 
-    const userMessage = input;
+    const userMessage = input.trim();
     setInput('');
     setMessages(prev => [...prev, { role: 'user', content: userMessage }]);
     setIsLoading(true);
 
-    const response = await generateCreativeContent(userMessage);
-
-    setMessages(prev => [...prev, { role: 'assistant', content: response }]);
-    setIsLoading(false);
+    try {
+      const response = await generateCreativeContent(userMessage);
+      setMessages(prev => [...prev, { role: 'assistant', content: response }]);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Não foi possível obter uma resposta da IA.';
+      toast.showError(message);
+      setMessages(prev => [...prev, { role: 'assistant', content: `⚠️ ${message}` }]);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {

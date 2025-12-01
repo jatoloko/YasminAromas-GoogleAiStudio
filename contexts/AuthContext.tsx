@@ -4,8 +4,8 @@ import { AuthService, User } from '../services/authService';
 interface AuthContextType {
   user: User | null;
   loading: boolean;
-  signUp: (username: string, password: string) => Promise<{ error: string | null }>;
-  signIn: (username: string, password: string) => Promise<{ error: string | null }>;
+  signUp: (username: string, email: string, password: string) => Promise<{ error: string | null; message?: string }>;
+  signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
 }
 
@@ -49,16 +49,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, []);
 
-  const signUp = useCallback(async (username: string, password: string) => {
-    const { user: newUser, error } = await AuthService.signUp(username, password);
+  const signUp = useCallback(async (username: string, email: string, password: string) => {
+    const { user: newUser, error, message } = await AuthService.signUp(username, email, password);
     if (!error && newUser) {
       setUser(newUser);
     }
-    return { error };
+    return { error, message };
   }, []);
 
-  const signIn = useCallback(async (username: string, password: string) => {
-    const { user: signedInUser, error } = await AuthService.signIn(username, password);
+  const signIn = useCallback(async (email: string, password: string) => {
+    const { user: signedInUser, error } = await AuthService.signIn(email, password);
     if (!error && signedInUser) {
       setUser(signedInUser);
     }

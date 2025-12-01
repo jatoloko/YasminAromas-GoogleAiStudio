@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { Plus, TrendingUp, DollarSign, Calendar, Trash2, ShoppingCart, Tag, Package, Search, Loader } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Plus, TrendingUp, DollarSign, Calendar, Trash2, ShoppingCart, Tag, Package, Search, Loader, Info } from 'lucide-react';
 import { SaleItem, InventoryItem, Product } from '../types';
-import { StorageService } from '../services/storageService';
+import { StorageService, isSupabaseUnavailableError } from '../services/storageService';
 import { useToast } from '../contexts/ToastContext';
 import { useAuth } from '../contexts/AuthContext';
 import { generateUUID } from '../utils/uuid';
@@ -43,6 +43,9 @@ const SalesTab: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [dateFilter, setDateFilter] = useState<string>('all');
   const [periodFilter, setPeriodFilter] = useState<string>('week');
+  const [supabaseUnavailable, setSupabaseUnavailable] = useState(false);
+  const [supabaseMessage, setSupabaseMessage] = useState<string | null>(null);
+  const supabaseWarningShown = useRef(false);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -58,9 +61,25 @@ const SalesTab: React.FC = () => {
         setSales(salesData);
         setInventory(inventoryData);
         setProducts(productsData);
+        setSupabaseUnavailable(false);
+        setSupabaseMessage(null);
+        supabaseWarningShown.current = false;
       } catch (error) {
         console.error('Erro ao carregar dados:', error);
-        toast.showError('Erro ao carregar vendas');
+        if (isSupabaseUnavailableError(error)) {
+          setSales([]);
+          setInventory([]);
+          setProducts([]);
+          setSupabaseUnavailable(true);
+          const message = 'Supabase não está configurado ou está indisponível. Os dados exibidos são locais.';
+          setSupabaseMessage(message);
+          if (!supabaseWarningShown.current) {
+            toast.showWarning(message);
+            supabaseWarningShown.current = true;
+          }
+        } else {
+          toast.showError('Erro ao carregar vendas');
+        }
       } finally {
         setIsLoading(false);
       }
@@ -191,6 +210,7 @@ const SalesTab: React.FC = () => {
         const inventorySaved = await StorageService.saveInventory(currentInventory, user.id);
         if (!inventorySaved) {
           console.warn('⚠️ Falha ao salvar inventário');
+          toast.showWarning('Venda salva localmente, mas o estoque não foi sincronizado com o Supabase.');
         }
         setInventory(currentInventory);
       }
@@ -207,7 +227,6 @@ const SalesTab: React.FC = () => {
       const updatedSales = [saleToAdd, ...sales];
       setSales(updatedSales);
       
-      console.log('📊 Salvando venda:', saleToAdd);
       const saleSaved = await StorageService.saveSales(updatedSales, user.id);
       
       if (!saleSaved) {
@@ -216,7 +235,6 @@ const SalesTab: React.FC = () => {
         return;
       }
 
-      console.log('✅ Venda salva com sucesso');
       toast.showSuccess('Venda registrada com sucesso!');
 
       // 4. Reset Form
@@ -344,6 +362,15 @@ const SalesTab: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      {supabaseUnavailable && supabaseMessage && (
+        <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 px-4 py-3 rounded-lg flex items-start gap-3">
+          <Info className="w-5 h-5 mt-0.5" />
+          <div>
+            <p className="font-semibold">Modo offline</p>
+            <p className="text-sm">{supabaseMessage} Consulte o arquivo SUPABASE_SETUP.md para ativar a sincronização.</p>
+          </div>
+        </div>
+      )}
       {/* Metrics Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white p-6 rounded-xl shadow-sm border border-brand-100 flex items-center">

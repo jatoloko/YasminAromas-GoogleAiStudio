@@ -13,7 +13,6 @@ const getAI = (): GoogleGenAI | null => {
   if (!ai && apiKey) {
     try {
       ai = new GoogleGenAI({ apiKey });
-      console.log('✅ Gemini AI inicializado com sucesso');
     } catch (error) {
       console.error('❌ Erro ao inicializar Gemini AI:', error);
     }
@@ -21,24 +20,42 @@ const getAI = (): GoogleGenAI | null => {
   return ai;
 };
 
+const SYSTEM_PROMPT = "Você é um assistente criativo e especialista para a 'YasminAromas', uma empresa de velas aromáticas artesanais. Suas respostas devem ser úteis, inspiradoras, orientadas a pequenos negócios e sempre em Português do Brasil. Use emojis apenas quando fizer sentido.";
+
 export const generateCreativeContent = async (prompt: string): Promise<string> => {
+  if (!prompt || !prompt.trim()) {
+    throw new Error('Envie uma mensagem para o assistente.');
+  }
+
   const aiInstance = getAI();
   
   if (!aiInstance) {
-    return "Erro: Chave de API não configurada. Por favor, configure a variável de ambiente GEMINI_API_KEY.";
+    throw new Error('Chave de API do Gemini não configurada. Defina GEMINI_API_KEY para usar o assistente.');
   }
 
   try {
     const response = await aiInstance.models.generateContent({
       model: 'gemini-2.5-flash',
-      contents: prompt,
-      config: {
-        systemInstruction: "Você é um assistente criativo e especialista para a 'YasminAromas', uma empresa de velas aromáticas artesanais. Suas respostas devem ser úteis, inspiradoras e focadas em negócios de artesanato. Use emojis ocasionalmente. Responda em Português do Brasil.",
-      }
+      contents: [
+        {
+          role: 'user',
+          parts: [{ text: prompt }],
+        },
+      ],
+      systemInstruction: {
+        role: 'system',
+        parts: [{ text: SYSTEM_PROMPT }],
+      },
     });
-    return response.text || "Não foi possível gerar uma resposta.";
+
+    const text = response.text?.trim();
+    if (text) {
+      return text;
+    }
+
+    throw new Error('A IA não retornou nenhuma resposta.');
   } catch (error) {
-    console.error("Gemini API Error:", error);
-    return "Desculpe, ocorreu um erro ao consultar a IA. Tente novamente mais tarde.";
+    const message = error instanceof Error ? error.message : 'Erro desconhecido ao consultar o Gemini.';
+    throw new Error(message);
   }
 };

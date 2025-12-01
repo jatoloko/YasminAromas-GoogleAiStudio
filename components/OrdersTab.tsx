@@ -1,9 +1,12 @@
-import React, { useState, useEffect } from 'react';
-import { Plus, Clock, CheckCircle, Package, Truck, Trash2, Edit2, Search } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Plus, Clock, CheckCircle, Package, Truck, Trash2, Edit2, Search, Loader, Info } from 'lucide-react';
 import { Order, OrderStatus } from '../types';
-import { StorageService } from '../services/storageService';
+import { StorageService, isSupabaseUnavailableError } from '../services/storageService';
 import { useToast } from '../contexts/ToastContext';
 import { useAuth } from '../contexts/AuthContext';
+import { validateOrder } from '../utils/validation';
+import { ListSkeleton } from './Skeleton';
+import ConfirmDialog from './ConfirmDialog';
 import { generateUUID } from '../utils/uuid';
 
 const OrdersTab: React.FC = () => {
@@ -21,63 +24,126 @@ const OrdersTab: React.FC = () => {
     status: OrderStatus.PENDING,
     estimatedValue: 0,
   });
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [supabaseUnavailable, setSupabaseUnavailable] = useState(false);
+  const [supabaseMessage, setSupabaseMessage] = useState<string | null>(null);
+  const supabaseWarningShown = useRef(false);
+  const [orderToDelete, setOrderToDelete] = useState<Order | null>(null);
 
   useEffect(() => {
     if (!user?.id) return;
     
     const loadData = async () => {
-      const data = await StorageService.getOrders(user.id);
-      setOrders(data);
+      try {
+        setIsLoading(true);
+        const data = await StorageService.getOrders(user.id);
+        setOrders(data);
+        setSupabaseUnavailable(false);
+        setSupabaseMessage(null);
+        supabaseWarningShown.current = false;
+      } catch (error) {
+        console.error('Erro ao carregar encomendas:', error);
+        if (isSupabaseUnavailableError(error)) {
+          setOrders([]);
+          setSupabaseUnavailable(true);
+          const message = 'Supabase não está configurado ou está indisponível. Suas encomendas serão salvas apenas localmente.';
+          setSupabaseMessage(message);
+          if (!supabaseWarningShown.current) {
+            toast.showWarning(message);
+            supabaseWarningShown.current = true;
+          }
+        } else {
+          toast.showError('Erro ao carregar encomendas.');
+        }
+      } finally {
+        setIsLoading(false);
+      }
     };
     loadData();
   }, [user?.id]);
 
   const handleAddOrder = async () => {
-    if (!newOrder.customerName || !newOrder.description) return;
+    const errors: Record<string, string> = {};
+    const validations = {
+      customerName: validateOrder.customerName(newOrder.customerName || ''),
+      description: validateOrder.description(newOrder.description || ''),
+      deadline: validateOrder.deadline(newOrder.deadline || ''),
+      estimatedValue: validateOrder.estimatedValue(newOrder.estimatedValue ?? ''),
+    };
 
-    let updatedOrders: Order[];
-
-    if (editingOrder) {
-      // Update existing order
-      updatedOrders = orders.map(o =>
-        o.id === editingOrder.id
-          ? {
-              id: editingOrder.id,
-              customerName: newOrder.customerName!,
-              description: newOrder.description!,
-              deadline: newOrder.deadline || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-              status: newOrder.status || OrderStatus.PENDING,
-              estimatedValue: Number(newOrder.estimatedValue) || 0,
-            }
-          : o
-      );
-    } else {
-      // Add new order
-      const orderToAdd: Order = {
-        id: generateUUID(),
-        customerName: newOrder.customerName,
-        description: newOrder.description,
-        deadline: newOrder.deadline || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-        status: newOrder.status || OrderStatus.PENDING,
-        estimatedValue: Number(newOrder.estimatedValue) || 0,
-      };
-      updatedOrders = [...orders, orderToAdd];
-    }
-
-    setOrders(updatedOrders);
-    if (user?.id) {
-      await StorageService.saveOrders(updatedOrders, user.id);
-      toast.showSuccess(editingOrder ? 'Encomenda atualizada com sucesso!' : 'Encomenda criada com sucesso!');
-    }
-    setNewOrder({
-      customerName: '',
-      description: '',
-      deadline: '',
-      status: OrderStatus.PENDING,
-      estimatedValue: 0,
+    (Object.keys(validations) as Array<keyof typeof validations>).forEach(key => {
+      const result = validations[key];
+      if (!result.isValid) {
+        errors[key] = result.error || '';
+      }
     });
-    setShowForm(false);
-    setEditingOrder(null);
+
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors);
+      toast.showError('Por favor, corrija os erros antes de salvar.');
+      return;
+    }
+
+    if (!user?.id) {
+      toast.showError('Usuário não autenticado.');
+      return;
+    }
+
+    try {
+      setIsSaving(true);
+      let updatedOrders: Order[];
+
+      if (editingOrder) {
+        updatedOrders = orders.map(o =>
+          o.id === editingOrder.id
+            ? {
+                id: editingOrder.id,
+                customerName: newOrder.customerName!,
+                description: newOrder.description!,
+                deadline: newOrder.deadline || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+                status: newOrder.status || OrderStatus.PENDING,
+                estimatedValue: Number(newOrder.estimatedValue) || 0,
+              }
+            : o
+        );
+      } else {
+        const orderToAdd: Order = {
+          id: generateUUID(),
+          customerName: newOrder.customerName!,
+          description: newOrder.description!,
+          deadline: newOrder.deadline || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+          status: newOrder.status || OrderStatus.PENDING,
+          estimatedValue: Number(newOrder.estimatedValue) || 0,
+        };
+        updatedOrders = [orderToAdd, ...orders];
+      }
+
+      setOrders(updatedOrders);
+      const saved = await StorageService.saveOrders(updatedOrders, user.id);
+      if (saved) {
+        toast.showSuccess(editingOrder ? 'Encomenda atualizada com sucesso!' : 'Encomenda criada com sucesso!');
+      } else {
+        toast.showError('Não foi possível salvar a encomenda no Supabase.');
+      }
+
+      setNewOrder({
+        customerName: '',
+        description: '',
+        deadline: '',
+        status: OrderStatus.PENDING,
+        estimatedValue: 0,
+      });
+      setShowForm(false);
+      setEditingOrder(null);
+      setFormErrors({});
+    } catch (error) {
+      console.error('Erro ao salvar encomenda:', error);
+      toast.showError('Erro ao salvar encomenda.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleEditOrder = (order: Order) => {
@@ -102,27 +168,34 @@ const OrdersTab: React.FC = () => {
       estimatedValue: 0,
     });
     setShowForm(false);
+    setFormErrors({});
   };
 
   const handleUpdateStatus = async (id: string, newStatus: OrderStatus) => {
     const updatedOrders = orders.map(o => o.id === id ? { ...o, status: newStatus } : o);
     setOrders(updatedOrders);
     if (user?.id) {
-      await StorageService.saveOrders(updatedOrders, user.id);
+      const saved = await StorageService.saveOrders(updatedOrders, user.id);
+      if (!saved) {
+        toast.showError('Não foi possível atualizar o status no Supabase.');
+      }
     }
   };
 
-  const handleDeleteOrder = async (e: React.MouseEvent, id: string) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (window.confirm("Tem certeza que deseja excluir esta encomenda? Esta ação não pode ser desfeita.")) {
-      const updatedOrders = orders.filter(o => o.id !== id);
-      setOrders(updatedOrders);
-      if (user?.id) {
-        await StorageService.saveOrders(updatedOrders, user.id);
-        toast.showSuccess('Encomenda excluída com sucesso!');
-      }
+  const handleDeleteOrder = async () => {
+    if (!orderToDelete || !user?.id) {
+      setOrderToDelete(null);
+      return;
     }
+    const updatedOrders = orders.filter(o => o.id !== orderToDelete.id);
+    setOrders(updatedOrders);
+    const saved = await StorageService.saveOrders(updatedOrders, user.id);
+    if (saved) {
+      toast.showSuccess('Encomenda excluída com sucesso!');
+    } else {
+      toast.showError('Não foi possível excluir a encomenda no Supabase.');
+    }
+    setOrderToDelete(null);
   };
 
   const getStatusColor = (status: OrderStatus) => {
@@ -154,6 +227,15 @@ const OrdersTab: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      {supabaseUnavailable && supabaseMessage && (
+        <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 px-4 py-3 rounded-lg flex items-start gap-3">
+          <Info className="w-5 h-5 mt-0.5" />
+          <div>
+            <p className="font-semibold">Modo offline</p>
+            <p className="text-sm">{supabaseMessage} Consulte o arquivo SUPABASE_SETUP.md para ativar a sincronização.</p>
+          </div>
+        </div>
+      )}
       <div className="flex justify-between items-center">
         <h2 className="text-xl font-bold text-gray-800">Encomendas</h2>
         <button
@@ -173,41 +255,88 @@ const OrdersTab: React.FC = () => {
             {editingOrder ? 'Editar Encomenda' : 'Detalhes da Encomenda'}
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <input
-              type="text"
-              placeholder="Nome do Cliente"
-              className="bg-white text-gray-900 border border-gray-300 p-2 rounded-lg focus:ring-2 focus:ring-brand-400 outline-none"
-              value={newOrder.customerName}
-              onChange={e => setNewOrder({ ...newOrder, customerName: e.target.value })}
-            />
-            <input
-              type="date"
-              className="bg-white text-gray-900 border border-gray-300 p-2 rounded-lg focus:ring-2 focus:ring-brand-400 outline-none"
-              value={newOrder.deadline?.split('T')[0]}
-              onChange={e => setNewOrder({ ...newOrder, deadline: e.target.value })}
-            />
-            <textarea
-              placeholder="Descrição do Pedido (ex: 50 velas mini para lembrancinha)"
-              className="bg-white text-gray-900 border border-gray-300 p-2 rounded-lg focus:ring-2 focus:ring-brand-400 outline-none md:col-span-2"
-              rows={3}
-              value={newOrder.description}
-              onChange={e => setNewOrder({ ...newOrder, description: e.target.value })}
-            />
-            <div className="flex items-center gap-2 md:col-span-2">
-              <span className="text-gray-500">Valor Estimado: R$</span>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Cliente <span className="text-red-500">*</span>
+              </label>
               <input
-                type="number"
-                placeholder="0.00"
-                className="bg-white text-gray-900 border border-gray-300 p-2 rounded-lg focus:ring-2 focus:ring-brand-400 outline-none flex-1"
-                value={newOrder.estimatedValue || ''}
-                onChange={e => setNewOrder({ ...newOrder, estimatedValue: parseFloat(e.target.value) })}
+                type="text"
+                placeholder="Nome do Cliente"
+                className={`bg-white text-gray-900 border p-2 rounded-lg focus:ring-2 focus:ring-brand-400 outline-none w-full ${formErrors.customerName ? 'border-red-500' : 'border-gray-300'}`}
+                value={newOrder.customerName}
+                onChange={e => {
+                  setNewOrder({ ...newOrder, customerName: e.target.value });
+                  setFormErrors({ ...formErrors, customerName: '' });
+                }}
               />
+              {formErrors.customerName && <p className="text-red-500 text-xs mt-1">{formErrors.customerName}</p>}
             </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Prazo de Entrega <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="date"
+                className={`bg-white text-gray-900 border p-2 rounded-lg focus:ring-2 focus:ring-brand-400 outline-none w-full ${formErrors.deadline ? 'border-red-500' : 'border-gray-300'}`}
+                value={newOrder.deadline ? newOrder.deadline.split('T')[0] : ''}
+                onChange={e => {
+                  setNewOrder({ ...newOrder, deadline: e.target.value });
+                  setFormErrors({ ...formErrors, deadline: '' });
+                }}
+              />
+              {formErrors.deadline && <p className="text-red-500 text-xs mt-1">{formErrors.deadline}</p>}
+            </div>
+
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Descrição do Pedido <span className="text-red-500">*</span>
+              </label>
+              <textarea
+                placeholder="Ex: 50 velas mini para lembrancinha"
+                className={`bg-white text-gray-900 border p-2 rounded-lg focus:ring-2 focus:ring-brand-400 outline-none w-full ${formErrors.description ? 'border-red-500' : 'border-gray-300'}`}
+                rows={3}
+                value={newOrder.description}
+                onChange={e => {
+                  setNewOrder({ ...newOrder, description: e.target.value });
+                  setFormErrors({ ...formErrors, description: '' });
+                }}
+              />
+              {formErrors.description && <p className="text-red-500 text-xs mt-1">{formErrors.description}</p>}
+            </div>
+
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Valor Estimado (opcional)
+              </label>
+              <div className="flex items-center gap-2">
+                <span className="text-gray-500">R$</span>
+                <input
+                  type="number"
+                  placeholder="0,00"
+                  className={`bg-white text-gray-900 border p-2 rounded-lg focus:ring-2 focus:ring-brand-400 outline-none flex-1 ${formErrors.estimatedValue ? 'border-red-500' : 'border-gray-300'}`}
+                  value={newOrder.estimatedValue || ''}
+                  onChange={e => {
+                    setNewOrder({ ...newOrder, estimatedValue: parseFloat(e.target.value) });
+                    setFormErrors({ ...formErrors, estimatedValue: '' });
+                  }}
+                />
+              </div>
+              {formErrors.estimatedValue && <p className="text-red-500 text-xs mt-1">{formErrors.estimatedValue}</p>}
+            </div>
+
             <button
               onClick={handleAddOrder}
-              className="bg-brand-500 text-white p-2 rounded-lg hover:bg-brand-600 transition-colors font-bold md:col-span-2"
+              disabled={isSaving}
+              className="bg-brand-500 text-white p-2 rounded-lg hover:bg-brand-600 transition-colors font-bold md:col-span-2 disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
-              Salvar Encomenda
+              {isSaving ? (
+                <>
+                  <Loader size={18} className="animate-spin" /> Salvando...
+                </>
+              ) : (
+                'Salvar Encomenda'
+              )}
             </button>
           </div>
         </div>
@@ -241,6 +370,11 @@ const OrdersTab: React.FC = () => {
         </div>
       )}
 
+      {isLoading ? (
+        <div className="bg-white p-6 rounded-xl border border-brand-100">
+          <ListSkeleton items={4} />
+        </div>
+      ) : (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {Object.values(OrderStatus).map((status) => (
           <div key={status} className="bg-gray-50 p-4 rounded-xl border border-gray-200 flex flex-col h-full min-h-[300px]">
@@ -280,7 +414,11 @@ const OrdersTab: React.FC = () => {
                         </button>
                        <button
                           type="button"
-                          onClick={(e) => handleDeleteOrder(e, order.id)}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setOrderToDelete(order);
+                          }}
                           className="text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-full p-2 transition-colors z-10"
                           title="Excluir Encomenda"
                         >
@@ -324,6 +462,15 @@ const OrdersTab: React.FC = () => {
           </div>
         ))}
       </div>
+      )}
+      <ConfirmDialog
+        open={!!orderToDelete}
+        title="Excluir encomenda"
+        description={`Tem certeza que deseja excluir "${orderToDelete?.customerName}"? Esta ação não pode ser desfeita.`}
+        confirmLabel="Excluir"
+        onConfirm={handleDeleteOrder}
+        onCancel={() => setOrderToDelete(null)}
+      />
     </div>
   );
 };

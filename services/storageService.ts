@@ -1,34 +1,57 @@
 import { InventoryItem, SaleItem, Order, Product } from '../types';
 import { SupabaseService } from './supabaseService';
 
+export const SUPABASE_UNAVAILABLE_ERROR = 'SUPABASE_UNAVAILABLE';
+
+const createSupabaseUnavailableError = (): Error => {
+  const error = new Error(SUPABASE_UNAVAILABLE_ERROR);
+  (error as Error & { code?: string }).code = SUPABASE_UNAVAILABLE_ERROR;
+  return error;
+};
+
+export const isSupabaseUnavailableError = (error: unknown): boolean => {
+  if (error instanceof Error) {
+    const errWithCode = error as Error & { code?: string };
+    return error.message === SUPABASE_UNAVAILABLE_ERROR || errWithCode.code === SUPABASE_UNAVAILABLE_ERROR;
+  }
+  return false;
+};
+
 export const StorageService = {
   // Inventory
   async getInventory(userId: string): Promise<InventoryItem[]> {
     if (!userId) return [];
     
     if (!SupabaseService.isAvailable()) {
-      console.warn('Supabase não disponível');
-      return [];
+      throw createSupabaseUnavailableError();
     }
 
-    return await SupabaseService.getInventory(userId);
+    try {
+      return await SupabaseService.getInventory(userId);
+    } catch (error) {
+      console.error('Erro ao buscar inventário no Supabase:', error);
+      throw error;
+    }
   },
 
-  async saveInventory(items: InventoryItem[], userId: string): Promise<void> {
+  async saveInventory(items: InventoryItem[], userId: string): Promise<boolean> {
     if (!userId) {
       console.error('UserId é obrigatório para salvar inventory');
-      return;
+      return false;
     }
 
     if (!SupabaseService.isAvailable()) {
       console.error('Supabase não disponível - não é possível salvar');
-      return;
+      return false;
     }
 
-    await SupabaseService.saveInventory(items, userId).catch(error => {
+    try {
+      await SupabaseService.saveInventory(items, userId);
+      return true;
+    } catch (error) {
       console.error('Failed to save inventory to Supabase:', error);
-      throw error;
-    });
+      return false;
+    }
   },
 
   // Sales
@@ -36,28 +59,35 @@ export const StorageService = {
     if (!userId) return [];
     
     if (!SupabaseService.isAvailable()) {
-      console.warn('Supabase não disponível');
-      return [];
+      throw createSupabaseUnavailableError();
     }
 
-    return await SupabaseService.getSales(userId);
+    try {
+      return await SupabaseService.getSales(userId);
+    } catch (error) {
+      console.error('Erro ao buscar vendas no Supabase:', error);
+      throw error;
+    }
   },
 
-  async saveSales(items: SaleItem[], userId: string): Promise<void> {
+  async saveSales(items: SaleItem[], userId: string): Promise<boolean> {
     if (!userId) {
       console.error('UserId é obrigatório para salvar sales');
-      return;
+      return false;
     }
 
     if (!SupabaseService.isAvailable()) {
       console.error('Supabase não disponível - não é possível salvar');
-      return;
+      return false;
     }
 
-    await SupabaseService.saveSales(items, userId).catch(error => {
+    try {
+      await SupabaseService.saveSales(items, userId);
+      return true;
+    } catch (error) {
       console.error('Failed to save sales to Supabase:', error);
-      throw error;
-    });
+      return false;
+    }
   },
 
   // Orders
@@ -65,28 +95,35 @@ export const StorageService = {
     if (!userId) return [];
     
     if (!SupabaseService.isAvailable()) {
-      console.warn('Supabase não disponível');
-      return [];
+      throw createSupabaseUnavailableError();
     }
 
-    return await SupabaseService.getOrders(userId);
+    try {
+      return await SupabaseService.getOrders(userId);
+    } catch (error) {
+      console.error('Erro ao buscar encomendas no Supabase:', error);
+      throw error;
+    }
   },
 
-  async saveOrders(items: Order[], userId: string): Promise<void> {
+  async saveOrders(items: Order[], userId: string): Promise<boolean> {
     if (!userId) {
       console.error('UserId é obrigatório para salvar orders');
-      return;
+      return false;
     }
 
     if (!SupabaseService.isAvailable()) {
       console.error('Supabase não disponível - não é possível salvar');
-      return;
+      return false;
     }
 
-    await SupabaseService.saveOrders(items, userId).catch(error => {
+    try {
+      await SupabaseService.saveOrders(items, userId);
+      return true;
+    } catch (error) {
       console.error('Failed to save orders to Supabase:', error);
-      throw error;
-    });
+      return false;
+    }
   },
 
   // Products
@@ -94,27 +131,34 @@ export const StorageService = {
     if (!userId) return [];
     
     if (!SupabaseService.isAvailable()) {
-      console.warn('Supabase não disponível');
-      return [];
+      throw createSupabaseUnavailableError();
     }
 
-    return await SupabaseService.getProducts(userId);
+    try {
+      return await SupabaseService.getProducts(userId);
+    } catch (error) {
+      console.error('Erro ao buscar produtos no Supabase:', error);
+      throw error;
+    }
   },
 
-  async saveProducts(items: Product[], userId: string): Promise<void> {
+  async saveProducts(items: Product[], userId: string): Promise<boolean> {
     if (!userId) {
       console.error('UserId é obrigatório para salvar products');
-      return;
+      return false;
     }
 
     if (!SupabaseService.isAvailable()) {
       console.error('Supabase não disponível - não é possível salvar');
-      return;
+      return false;
     }
 
-    await SupabaseService.saveProducts(items, userId).catch(error => {
+    try {
+      await SupabaseService.saveProducts(items, userId);
+      return true;
+    } catch (error) {
       console.error('Failed to save products to Supabase:', error);
-      throw error;
-    });
+      return false;
+    }
   },
 };

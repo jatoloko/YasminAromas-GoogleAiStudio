@@ -176,9 +176,10 @@ YasminAromas-GoogleAiStudio/
 
 ## 🔐 Segurança
 
-- Dados armazenados localmente no navegador (localStorage)
-- Sincronização opcional com Supabase (seus dados, seu controle)
-- Nenhuma informação sensível é compartilhada
+- Autenticação via Supabase Auth (email + senha) com Row Level Security por usuário
+- Dados armazenados localmente no navegador (localStorage) para feedback instantâneo
+- Sincronização com Supabase garante backup na nuvem
+- Nenhuma informação sensível é compartilhada publicamente
 - API keys devem ser mantidas em `.env.local` (não commitadas)
 
 ## 📱 Responsividade

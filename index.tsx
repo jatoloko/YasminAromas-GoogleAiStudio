@@ -5,15 +5,6 @@ import { ToastProvider } from './contexts/ToastContext';
 import { AuthProvider } from './contexts/AuthContext';
 import ErrorBoundary from './components/ErrorBoundary';
 
-// Debug: Verificar variáveis de ambiente
-// IMPORTANTE: process.env não está disponível no browser, usar apenas import.meta.env
-console.log('🔍 Debug - Variáveis de ambiente:', {
-  VITE_SUPABASE_URL: import.meta.env.VITE_SUPABASE_URL ? '✅ Configurada' : '❌ Não configurada',
-  VITE_SUPABASE_ANON_KEY: import.meta.env.VITE_SUPABASE_ANON_KEY ? '✅ Configurada' : '❌ Não configurada',
-  GEMINI_API_KEY: import.meta.env.GEMINI_API_KEY ? '✅ Configurada' : '❌ Não configurada',
-  MODE: import.meta.env.MODE,
-});
-
 const rootElement = document.getElementById('root');
 if (!rootElement) {
   console.error('❌ Elemento root não encontrado!');
@@ -25,8 +16,6 @@ if (!rootElement) {
   `;
   throw new Error("Could not find root element to mount to");
 }
-
-console.log('✅ Elemento root encontrado, iniciando renderização...');
 
 try {
   const root = ReactDOM.createRoot(rootElement);
@@ -40,8 +29,6 @@ try {
       </AuthProvider>
     </ErrorBoundary>
   );
-  
-  console.log('✅ Aplicação renderizada com sucesso!');
 } catch (error) {
   console.error('❌ Erro ao renderizar aplicação:', error);
   

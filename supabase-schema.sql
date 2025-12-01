@@ -3,18 +3,10 @@
 -- Execute este script no SQL Editor do Supabase
 -- ============================================
 
--- Tabela de Usuários
-CREATE TABLE users (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  username TEXT NOT NULL UNIQUE,
-  password_hash TEXT NOT NULL,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
 -- Tabela de Inventário
 CREATE TABLE inventory (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
   category TEXT NOT NULL,
   quantity NUMERIC NOT NULL DEFAULT 0,
@@ -27,7 +19,7 @@ CREATE TABLE inventory (
 -- Tabela de Vendas
 CREATE TABLE sales (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   date TIMESTAMP WITH TIME ZONE NOT NULL,
   customer_name TEXT NOT NULL,
   products TEXT NOT NULL,
@@ -38,7 +30,7 @@ CREATE TABLE sales (
 -- Tabela de Encomendas
 CREATE TABLE orders (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   customer_name TEXT NOT NULL,
   description TEXT NOT NULL,
   deadline TIMESTAMP WITH TIME ZONE NOT NULL,
@@ -51,7 +43,7 @@ CREATE TABLE orders (
 -- Tabela de Produtos
 CREATE TABLE products (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
   price NUMERIC NOT NULL DEFAULT 0,
   recipe JSONB DEFAULT '[]'::jsonb,
@@ -60,7 +52,6 @@ CREATE TABLE products (
 );
 
 -- Índices para melhor performance
-CREATE INDEX idx_users_username ON users(username);
 CREATE INDEX idx_inventory_user_id ON inventory(user_id);
 CREATE INDEX idx_inventory_category ON inventory(category);
 CREATE INDEX idx_sales_user_id ON sales(user_id);
@@ -96,88 +87,78 @@ CREATE TRIGGER update_products_updated_at
   EXECUTE FUNCTION update_updated_at_column();
 
 -- Habilitar Row Level Security (RLS)
-ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE inventory ENABLE ROW LEVEL SECURITY;
 ALTER TABLE sales ENABLE ROW LEVEL SECURITY;
 ALTER TABLE orders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE products ENABLE ROW LEVEL SECURITY;
 
--- Políticas RLS para users (permitir leitura e criação pública para registro/login)
-CREATE POLICY "Allow public read on users" 
-  ON users FOR SELECT 
-  USING (true);
-
-CREATE POLICY "Allow public insert on users" 
-  ON users FOR INSERT 
-  WITH CHECK (true);
-
 -- Políticas RLS para inventory (usuários só veem seus próprios dados)
 CREATE POLICY "Users can view own inventory" 
   ON inventory FOR SELECT 
-  USING (true);
+  USING (user_id = auth.uid());
 
 CREATE POLICY "Users can insert own inventory" 
   ON inventory FOR INSERT 
-  WITH CHECK (true);
+  WITH CHECK (user_id = auth.uid());
 
 CREATE POLICY "Users can update own inventory" 
   ON inventory FOR UPDATE 
-  USING (true);
+  USING (user_id = auth.uid());
 
 CREATE POLICY "Users can delete own inventory" 
   ON inventory FOR DELETE 
-  USING (true);
+  USING (user_id = auth.uid());
 
 -- Políticas RLS para sales (usuários só veem suas próprias vendas)
 CREATE POLICY "Users can view own sales" 
   ON sales FOR SELECT 
-  USING (true);
+  USING (user_id = auth.uid());
 
 CREATE POLICY "Users can insert own sales" 
   ON sales FOR INSERT 
-  WITH CHECK (true);
+  WITH CHECK (user_id = auth.uid());
 
 CREATE POLICY "Users can update own sales" 
   ON sales FOR UPDATE 
-  USING (true);
+  USING (user_id = auth.uid());
 
 CREATE POLICY "Users can delete own sales" 
   ON sales FOR DELETE 
-  USING (true);
+  USING (user_id = auth.uid());
 
 -- Políticas RLS para orders (usuários só veem suas próprias encomendas)
 CREATE POLICY "Users can view own orders" 
   ON orders FOR SELECT 
-  USING (true);
+  USING (user_id = auth.uid());
 
 CREATE POLICY "Users can insert own orders" 
   ON orders FOR INSERT 
-  WITH CHECK (true);
+  WITH CHECK (user_id = auth.uid());
 
 CREATE POLICY "Users can update own orders" 
   ON orders FOR UPDATE 
-  USING (true);
+  USING (user_id = auth.uid());
 
 CREATE POLICY "Users can delete own orders" 
   ON orders FOR DELETE 
-  USING (true);
+  USING (user_id = auth.uid());
 
 -- Políticas RLS para products (usuários só veem seus próprios produtos)
 CREATE POLICY "Users can view own products" 
   ON products FOR SELECT 
-  USING (true);
+  USING (user_id = auth.uid());
 
 CREATE POLICY "Users can insert own products" 
   ON products FOR INSERT 
-  WITH CHECK (true);
+  WITH CHECK (user_id = auth.uid());
 
 CREATE POLICY "Users can update own products" 
   ON products FOR UPDATE 
-  USING (true);
+  USING (user_id = auth.uid());
 
 CREATE POLICY "Users can delete own products" 
   ON products FOR DELETE 
-  USING (true);
+  USING (user_id = auth.uid());
 
 -- ============================================
 -- ✅ Schema criado com sucesso!

@@ -16,14 +16,22 @@
 
 **Verificar se foi criado:**
 - No menu lateral, clique em **Table Editor**
-- Você deve ver 5 tabelas:
-  - ✅ `users` - Usuários do sistema
+- Você deve ver 4 tabelas:
   - ✅ `inventory` - Controle de estoque
   - ✅ `sales` - Vendas
   - ✅ `orders` - Encomendas
   - ✅ `products` - Produtos
 
-## 🔐 Passo 2: Configurar Variáveis de Ambiente Local
+## 🔐 Passo 2: Ativar Autenticação (Email + Senha)
+
+1. No painel do Supabase, vá em **Authentication > Providers**
+2. Habilite o provedor **Email**
+3. (Opcional, mas recomendado para testes locais) Desative a confirmação obrigatória de e-mail em **Authentication > Providers > Email** (`Disable email confirmations`). Caso mantenha a confirmação, os usuários precisarão validar o e-mail antes de acessar o app.
+4. Em **Authentication > Policies**, confirme que `Enable Email Signup` está ativo.
+
+> O login do app utiliza e-mail + senha do Supabase Auth. O campo "Nome de Usuário" é salvo no `user_metadata` e exibido apenas na interface.
+
+## ⚙️ Passo 3: Configurar Variáveis de Ambiente Local
 
 Crie um arquivo `.env.local` na raiz do projeto com o seguinte conteúdo:
 
@@ -40,7 +48,7 @@ GEMINI_API_KEY=sua_chave_gemini_aqui
 - No VS Code: Clique com botão direito na raiz do projeto > New File > `.env.local`
 - Ou copie o arquivo `.env.example` (se existir) e renomeie para `.env.local`
 
-## 🧪 Passo 3: Testar Localmente
+## 🧪 Passo 4: Testar Localmente
 
 Após criar o `.env.local`, reinicie o servidor de desenvolvimento:
 
@@ -55,7 +63,7 @@ npm run dev
 4. Verifique se consegue acessar as abas (Vendas, Encomendas, etc.)
 5. Abra o Console do navegador (F12) e verifique se há erros
 
-## 📦 Passo 4: Configurar no Vercel (Produção)
+## 📦 Passo 5: Configurar no Vercel (Produção)
 
 Veja as instruções completas no arquivo `VERCEL_SETUP.md`.
 
@@ -82,6 +90,10 @@ Veja as instruções completas no arquivo `VERCEL_SETUP.md`.
 - Você não executou o schema SQL no Supabase
 - Volte ao **Passo 1** e execute o `supabase-schema.sql`
 
+### Erro: "Email not confirmed" ou "Email confirmação obrigatória"
+- Se estiver usando e-mails reais, confirme a conta clicando no link enviado pelo Supabase
+- Para ambientes de testes, considere desativar a confirmação obrigatória conforme descrito no Passo 2
+
 ### Erro: "Failed to fetch" ou "Network error"
 - Verifique se a URL do Supabase está correta
 - Verifique se o projeto Supabase está ativo
@@ -93,10 +105,6 @@ Veja as instruções completas no arquivo `VERCEL_SETUP.md`.
 - Veja `VERCEL_SETUP.md` para mais detalhes
 
 ## 📚 Estrutura do Banco de Dados
-
-### Tabela `users`
-- Armazena usuários do sistema (username/password)
-- Cada usuário tem um `id` único (UUID)
 
 ### Tabela `inventory`
 - Controle de estoque de ingredientes
@@ -114,4 +122,4 @@ Veja as instruções completas no arquivo `VERCEL_SETUP.md`.
 - Produtos cadastrados com receitas
 - Vinculado ao usuário via `user_id`
 
-Todas as tabelas (exceto `users`) têm `user_id` para isolamento de dados entre usuários.
+> Todas as tabelas usam `user_id` referenciando `auth.users(id)` e as políticas RLS garantem que `auth.uid()` só acesse seus próprios registros.

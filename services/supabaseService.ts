@@ -14,21 +14,10 @@ const initializeSupabase = (): SupabaseClient | null => {
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
   const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 
-  // Debug
-  if (typeof window !== 'undefined') {
-    console.log('🔍 Supabase Service - Debug:', {
-      hasUrl: !!supabaseUrl,
-      hasKey: !!supabaseAnonKey,
-      urlLength: supabaseUrl.length,
-      keyLength: supabaseAnonKey.length,
-    });
-  }
-
   if (supabaseUrl && supabaseAnonKey) {
     try {
       supabase = createClient(supabaseUrl, supabaseAnonKey);
       supabaseInitialized = true;
-      console.log('✅ Cliente Supabase inicializado com sucesso');
     } catch (error) {
       console.error('❌ Erro ao inicializar cliente Supabase:', error);
       supabaseInitialized = true; // Marcar como inicializado mesmo em erro para não tentar novamente
@@ -40,6 +29,8 @@ const initializeSupabase = (): SupabaseClient | null => {
 
   return supabase;
 };
+
+export const getSupabaseClient = (): SupabaseClient | null => initializeSupabase();
 
 // Verificar se Supabase está disponível
 const isSupabaseAvailable = (): boolean => {
@@ -219,14 +210,10 @@ export const SupabaseService = {
     }
     
     try {
-      console.log(`📊 Salvando ${items.length} vendas para user ${userId}`);
-      
       for (const item of items) {
         const dbItem = convertSaleToDB(item);
         dbItem.user_id = userId;
-        
-        console.log('📤 Enviando para Supabase:', dbItem);
-        
+
         const { error } = await client
           .from('sales')
           .upsert(dbItem, { onConflict: 'id' });
@@ -235,11 +222,8 @@ export const SupabaseService = {
           console.error('❌ Erro ao fazer upsert:', error);
           throw error;
         }
-        
-        console.log('✅ Venda salva:', dbItem.id);
       }
-      
-      console.log('✅ Todas as vendas foram salvas com sucesso');
+
       return true;
     } catch (error) {
       console.error('❌ Erro ao salvar vendas no Supabase:', error);

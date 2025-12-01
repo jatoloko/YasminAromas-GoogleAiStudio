@@ -169,5 +169,16 @@ export const validateAuth = {
     }
     return { isValid: true };
   },
+
+  email: (value: string): ValidationResult => {
+    if (!value || value.trim().length === 0) {
+      return { isValid: false, error: 'E-mail é obrigatório' };
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(value.toLowerCase())) {
+      return { isValid: false, error: 'Informe um e-mail válido' };
+    }
+    return { isValid: true };
+  },
 };
 

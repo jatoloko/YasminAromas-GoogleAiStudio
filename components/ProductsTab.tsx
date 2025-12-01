@@ -1,10 +1,13 @@
-import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, Package, Save, Beaker, X, Edit2, Search } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Plus, Trash2, Package, Save, Beaker, X, Edit2, Search, Info, Loader } from 'lucide-react';
 import { InventoryItem, Product, ProductRecipeItem } from '../types';
-import { StorageService } from '../services/storageService';
+import { StorageService, isSupabaseUnavailableError } from '../services/storageService';
 import { useToast } from '../contexts/ToastContext';
 import { useAuth } from '../contexts/AuthContext';
 import { generateUUID } from '../utils/uuid';
+import { validateProduct } from '../utils/validation';
+import { ListSkeleton } from './Skeleton';
+import ConfirmDialog from './ConfirmDialog';
 
 const ProductsTab: React.FC = () => {
   const toast = useToast();
@@ -23,17 +26,47 @@ const ProductsTab: React.FC = () => {
   // Recipe Builder State
   const [selectedIngredientId, setSelectedIngredientId] = useState('');
   const [ingredientQty, setIngredientQty] = useState<number | ''>('');
+  const [supabaseUnavailable, setSupabaseUnavailable] = useState(false);
+  const [supabaseMessage, setSupabaseMessage] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const [productToDelete, setProductToDelete] = useState<Product | null>(null);
+  const supabaseWarningShown = useRef(false);
 
   useEffect(() => {
     if (!user?.id) return;
     
     const loadData = async () => {
-      const [productsData, inventoryData] = await Promise.all([
-        StorageService.getProducts(user.id),
-        StorageService.getInventory(user.id)
-      ]);
-      setProducts(productsData);
-      setInventory(inventoryData);
+      try {
+        setIsLoading(true);
+        const [productsData, inventoryData] = await Promise.all([
+          StorageService.getProducts(user.id),
+          StorageService.getInventory(user.id)
+        ]);
+        setProducts(productsData);
+        setInventory(inventoryData);
+        setSupabaseUnavailable(false);
+        setSupabaseMessage(null);
+        supabaseWarningShown.current = false;
+      } catch (error) {
+        console.error('Erro ao carregar produtos/estoque:', error);
+        if (isSupabaseUnavailableError(error)) {
+          setProducts([]);
+          setInventory([]);
+          setSupabaseUnavailable(true);
+          const message = 'Supabase não está configurado ou está indisponível. Produtos serão salvos apenas localmente.';
+          setSupabaseMessage(message);
+          if (!supabaseWarningShown.current) {
+            toast.showWarning(message);
+            supabaseWarningShown.current = true;
+          }
+        } else {
+          toast.showError('Erro ao carregar produtos.');
+        }
+      } finally {
+        setIsLoading(false);
+      }
     };
     loadData();
   }, [user?.id]);
@@ -43,7 +76,7 @@ const ProductsTab: React.FC = () => {
 
     // Check if already in recipe
     if (recipe.find(r => r.inventoryItemId === selectedIngredientId)) {
-      alert("Este item já está na receita.");
+      toast.showWarning('Este item já está na receita.');
       return;
     }
 
@@ -57,48 +90,73 @@ const ProductsTab: React.FC = () => {
   };
 
   const handleSaveProduct = async () => {
-    if (!newProductName || !newProductPrice) {
-      alert("Nome e Preço são obrigatórios.");
+    const errors: Record<string, string> = {};
+    const nameValidation = validateProduct.name(newProductName);
+    if (!nameValidation.isValid) {
+      errors.name = nameValidation.error || '';
+    }
+    const priceValidation = validateProduct.price(newProductPrice === '' ? '' : Number(newProductPrice));
+    if (!priceValidation.isValid) {
+      errors.price = priceValidation.error || '';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors);
+      toast.showError('Por favor, corrija os erros antes de salvar.');
       return;
     }
 
-    let updatedProducts: Product[];
-
-    if (editingProduct) {
-      // Update existing product
-      updatedProducts = products.map(p =>
-        p.id === editingProduct.id
-          ? {
-              id: editingProduct.id,
-              name: newProductName,
-              price: Number(newProductPrice),
-              recipe: recipe,
-            }
-          : p
-      );
-    } else {
-      // Add new product
-      const newProduct: Product = {
-        id: generateUUID(),
-        name: newProductName,
-        price: Number(newProductPrice),
-        recipe: recipe,
-      };
-      updatedProducts = [...products, newProduct];
+    if (!user?.id) {
+      toast.showError('Usuário não autenticado.');
+      return;
     }
 
-    setProducts(updatedProducts);
-    if (user?.id) {
-      await StorageService.saveProducts(updatedProducts, user.id);
-      toast.showSuccess(editingProduct ? 'Produto atualizado com sucesso!' : 'Produto cadastrado com sucesso!');
-    }
+    try {
+      setIsSaving(true);
+      let updatedProducts: Product[];
 
-    // Reset Form
-    setNewProductName('');
-    setNewProductPrice('');
-    setRecipe([]);
-    setShowForm(false);
-    setEditingProduct(null);
+      if (editingProduct) {
+        updatedProducts = products.map(p =>
+          p.id === editingProduct.id
+            ? {
+                id: editingProduct.id,
+                name: newProductName,
+                price: Number(newProductPrice),
+                recipe: recipe,
+              }
+            : p
+        );
+      } else {
+        const newProduct: Product = {
+          id: generateUUID(),
+          name: newProductName,
+          price: Number(newProductPrice),
+          recipe: recipe,
+        };
+        updatedProducts = [...products, newProduct];
+      }
+
+      setProducts(updatedProducts);
+      const saved = await StorageService.saveProducts(updatedProducts, user.id);
+      if (saved) {
+        toast.showSuccess(editingProduct ? 'Produto atualizado com sucesso!' : 'Produto cadastrado com sucesso!');
+      } else {
+        toast.showError('Não foi possível salvar o produto no Supabase.');
+      }
+
+      // Reset Form
+      setNewProductName('');
+      setNewProductPrice('');
+      setRecipe([]);
+      setShowForm(false);
+      setEditingProduct(null);
+      setFormErrors({});
+    } catch (error) {
+      console.error('Erro ao salvar produto:', error);
+      toast.showError('Erro ao salvar produto.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleEditProduct = (product: Product) => {
@@ -115,17 +173,23 @@ const ProductsTab: React.FC = () => {
     setNewProductPrice('');
     setRecipe([]);
     setShowForm(false);
+    setFormErrors({});
   };
 
-  const handleDeleteProduct = async (id: string) => {
-    if (confirm("Tem certeza que deseja excluir este produto?")) {
-      const updated = products.filter(p => p.id !== id);
-      setProducts(updated);
-      if (user?.id) {
-        await StorageService.saveProducts(updated, user.id);
-        toast.showSuccess('Produto excluído com sucesso!');
-      }
+  const handleDeleteProduct = async () => {
+    if (!productToDelete || !user?.id) {
+      setProductToDelete(null);
+      return;
     }
+    const updated = products.filter(p => p.id !== productToDelete.id);
+    setProducts(updated);
+    const saved = await StorageService.saveProducts(updated, user.id);
+    if (saved) {
+      toast.showSuccess('Produto excluído com sucesso!');
+    } else {
+      toast.showError('Não foi possível excluir o produto no Supabase.');
+    }
+    setProductToDelete(null);
   };
 
   const getInventoryItemName = (id: string) => {
@@ -140,6 +204,15 @@ const ProductsTab: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      {supabaseUnavailable && supabaseMessage && (
+        <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 px-4 py-3 rounded-lg flex items-start gap-3">
+          <Info className="w-5 h-5 mt-0.5" />
+          <div>
+            <p className="font-semibold">Modo offline</p>
+            <p className="text-sm">{supabaseMessage} Consulte o arquivo SUPABASE_SETUP.md para mais detalhes.</p>
+          </div>
+        </div>
+      )}
       <div className="flex justify-between items-center">
         <div>
           <h2 className="text-xl font-bold text-gray-800">Meus Produtos</h2>
@@ -169,24 +242,36 @@ const ProductsTab: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Nome do Produto</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Nome do Produto <span className="text-red-500">*</span>
+                </label>
                 <input
                   type="text"
                   placeholder="Ex: Vela Lavanda 200g"
-                  className="w-full bg-white text-gray-900 border border-gray-300 p-2 rounded-lg focus:ring-2 focus:ring-brand-400 outline-none"
+                  className={`w-full bg-white text-gray-900 border p-2 rounded-lg focus:ring-2 focus:ring-brand-400 outline-none ${formErrors.name ? 'border-red-500' : 'border-gray-300'}`}
                   value={newProductName}
-                  onChange={e => setNewProductName(e.target.value)}
+                  onChange={e => {
+                    setNewProductName(e.target.value);
+                    setFormErrors({ ...formErrors, name: '' });
+                  }}
                 />
+                {formErrors.name && <p className="text-red-500 text-xs mt-1">{formErrors.name}</p>}
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Preço de Venda (R$)</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Preço de Venda (R$) <span className="text-red-500">*</span>
+                </label>
                 <input
                   type="number"
                   placeholder="0.00"
-                  className="w-full bg-white text-gray-900 border border-gray-300 p-2 rounded-lg focus:ring-2 focus:ring-brand-400 outline-none"
+                  className={`w-full bg-white text-gray-900 border p-2 rounded-lg focus:ring-2 focus:ring-brand-400 outline-none ${formErrors.price ? 'border-red-500' : 'border-gray-300'}`}
                   value={newProductPrice}
-                  onChange={e => setNewProductPrice(Number(e.target.value) || '')}
+                  onChange={e => {
+                    setNewProductPrice(Number(e.target.value) || '');
+                    setFormErrors({ ...formErrors, price: '' });
+                  }}
                 />
+                {formErrors.price && <p className="text-red-500 text-xs mt-1">{formErrors.price}</p>}
               </div>
             </div>
 
@@ -243,9 +328,18 @@ const ProductsTab: React.FC = () => {
           <div className="mt-6 flex justify-end">
             <button
               onClick={handleSaveProduct}
-              className="bg-brand-500 text-white px-6 py-2 rounded-lg hover:bg-brand-600 transition-colors font-bold flex items-center gap-2"
+              disabled={isSaving}
+              className="bg-brand-500 text-white px-6 py-2 rounded-lg hover:bg-brand-600 transition-colors font-bold flex items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
             >
-              <Save size={18} /> Salvar Produto
+              {isSaving ? (
+                <>
+                  <Loader size={18} className="animate-spin" /> Salvando...
+                </>
+              ) : (
+                <>
+                  <Save size={18} /> Salvar Produto
+                </>
+              )}
             </button>
           </div>
         </div>
@@ -267,6 +361,11 @@ const ProductsTab: React.FC = () => {
         </div>
       )}
 
+      {isLoading ? (
+        <div className="bg-white p-6 rounded-xl border border-brand-100">
+          <ListSkeleton items={3} />
+        </div>
+      ) : (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {filteredProducts.map(product => (
           <div key={product.id} className="bg-white p-5 rounded-xl shadow-sm border border-brand-100 hover:shadow-md transition-shadow">
@@ -276,7 +375,7 @@ const ProductsTab: React.FC = () => {
                 <button onClick={() => handleEditProduct(product)} className="text-gray-300 hover:text-blue-500">
                   <Edit2 size={18} />
                 </button>
-                <button onClick={() => handleDeleteProduct(product.id)} className="text-gray-300 hover:text-red-500">
+                <button onClick={() => setProductToDelete(product)} className="text-gray-300 hover:text-red-500">
                   <Trash2 size={18} />
                 </button>
               </div>
@@ -312,6 +411,15 @@ const ProductsTab: React.FC = () => {
           </div>
         )}
       </div>
+      )}
+      <ConfirmDialog
+        open={!!productToDelete}
+        title="Excluir produto"
+        description={`Tem certeza que deseja excluir "${productToDelete?.name}"? Esta ação não pode ser desfeita.`}
+        confirmLabel="Excluir"
+        onConfirm={handleDeleteProduct}
+        onCancel={() => setProductToDelete(null)}
+      />
     </div>
   );
 };
