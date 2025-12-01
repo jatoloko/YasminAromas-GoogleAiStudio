@@ -207,25 +207,42 @@ export const SupabaseService = {
   },
 
   async saveSales(items: SaleItem[], userId: string): Promise<boolean> {
-    if (!isSupabaseAvailable() || !userId) return false;
+    if (!isSupabaseAvailable() || !userId) {
+      console.warn('⚠️ Supabase não disponível ou userId ausente');
+      return false;
+    }
     
     const client = initializeSupabase();
-    if (!client) return false;
+    if (!client) {
+      console.error('❌ Cliente Supabase não inicializado');
+      return false;
+    }
     
     try {
+      console.log(`📊 Salvando ${items.length} vendas para user ${userId}`);
+      
       for (const item of items) {
         const dbItem = convertSaleToDB(item);
         dbItem.user_id = userId;
+        
+        console.log('📤 Enviando para Supabase:', dbItem);
+        
         const { error } = await client
           .from('sales')
           .upsert(dbItem, { onConflict: 'id' });
         
-        if (error) throw error;
+        if (error) {
+          console.error('❌ Erro ao fazer upsert:', error);
+          throw error;
+        }
+        
+        console.log('✅ Venda salva:', dbItem.id);
       }
       
+      console.log('✅ Todas as vendas foram salvas com sucesso');
       return true;
     } catch (error) {
-      console.error('Error saving sales to Supabase:', error);
+      console.error('❌ Erro ao salvar vendas no Supabase:', error);
       return false;
     }
   },

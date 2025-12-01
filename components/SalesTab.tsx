@@ -118,68 +118,87 @@ const SalesTab: React.FC = () => {
       return;
     }
 
-    // 1. Build Product Description String
-    let productsDescription = cart.map(c => `${c.quantity}x ${c.name}`).join(', ');
-    if (manualProductNotes) {
-      productsDescription += productsDescription ? `, ${manualProductNotes}` : manualProductNotes;
+    if (!user?.id) {
+      toast.showError("Usuário não autenticado.");
+      return;
     }
-    if (!productsDescription) productsDescription = "Venda Diversa";
 
-    // 2. Deduct from Stock logic
-    if (cart.length > 0) {
-      const currentInventory = [...inventory]; // Copy to mutate
-      
-      cart.forEach(cartItem => {
-        if (cartItem.type === 'INVENTORY_ITEM') {
-          // Direct deduction
-          const invIndex = currentInventory.findIndex(i => i.id === cartItem.id);
-          if (invIndex >= 0) {
-            currentInventory[invIndex].quantity = Math.max(0, currentInventory[invIndex].quantity - cartItem.quantity);
+    try {
+      // 1. Build Product Description String
+      let productsDescription = cart.map(c => `${c.quantity}x ${c.name}`).join(', ');
+      if (manualProductNotes) {
+        productsDescription += productsDescription ? `, ${manualProductNotes}` : manualProductNotes;
+      }
+      if (!productsDescription) productsDescription = "Venda Diversa";
+
+      // 2. Deduct from Stock logic
+      if (cart.length > 0) {
+        const currentInventory = [...inventory]; // Copy to mutate
+        
+        cart.forEach(cartItem => {
+          if (cartItem.type === 'INVENTORY_ITEM') {
+            // Direct deduction
+            const invIndex = currentInventory.findIndex(i => i.id === cartItem.id);
+            if (invIndex >= 0) {
+              currentInventory[invIndex].quantity = Math.max(0, currentInventory[invIndex].quantity - cartItem.quantity);
+            }
+          } else if (cartItem.type === 'PRODUCT') {
+            // Recipe deduction
+            const product = products.find(p => p.id === cartItem.id);
+            if (product && product.recipe) {
+              product.recipe.forEach(ingredient => {
+                const invIndex = currentInventory.findIndex(i => i.id === ingredient.inventoryItemId);
+                if (invIndex >= 0) {
+                  // Deduct: Ingredient Qty per unit * Sold Units
+                  const totalToDeduct = ingredient.quantity * cartItem.quantity;
+                  currentInventory[invIndex].quantity = Math.max(0, currentInventory[invIndex].quantity - totalToDeduct);
+                }
+              });
+            }
           }
-        } else if (cartItem.type === 'PRODUCT') {
-          // Recipe deduction
-          const product = products.find(p => p.id === cartItem.id);
-          if (product && product.recipe) {
-            product.recipe.forEach(ingredient => {
-              const invIndex = currentInventory.findIndex(i => i.id === ingredient.inventoryItemId);
-              if (invIndex >= 0) {
-                // Deduct: Ingredient Qty per unit * Sold Units
-                const totalToDeduct = ingredient.quantity * cartItem.quantity;
-                currentInventory[invIndex].quantity = Math.max(0, currentInventory[invIndex].quantity - totalToDeduct);
-              }
-            });
-          }
+        });
+
+        const inventorySaved = await StorageService.saveInventory(currentInventory, user.id);
+        if (!inventorySaved) {
+          console.warn('⚠️ Falha ao salvar inventário');
         }
-      });
-
-      if (user?.id) {
-        await StorageService.saveInventory(currentInventory, user.id);
         setInventory(currentInventory);
-      } 
-    }
+      }
 
-    // 3. Save Sale
-    const saleToAdd: SaleItem = {
-      id: Date.now().toString(),
-      date: date || new Date().toISOString(),
-      customerName,
-      products: productsDescription,
-      totalValue: Number(totalValue),
-    };
+      // 3. Save Sale
+      const saleToAdd: SaleItem = {
+        id: Date.now().toString(),
+        date: date || new Date().toISOString(),
+        customerName,
+        products: productsDescription,
+        totalValue: Number(totalValue),
+      };
 
-    const updatedSales = [saleToAdd, ...sales];
-    setSales(updatedSales);
-    if (user?.id) {
-      await StorageService.saveSales(updatedSales, user.id);
+      const updatedSales = [saleToAdd, ...sales];
+      setSales(updatedSales);
+      
+      console.log('📊 Salvando venda:', saleToAdd);
+      const saleSaved = await StorageService.saveSales(updatedSales, user.id);
+      
+      if (!saleSaved) {
+        console.error('❌ Falha ao salvar venda no Supabase');
+        toast.showError('Erro ao salvar venda. Verifique o console.');
+        return;
+      }
+
+      console.log('✅ Venda salva com sucesso');
       toast.showSuccess('Venda registrada com sucesso!');
-    }
 
-    // 4. Reset Form
-    setCustomerName('');
-    setTotalValue('');
-    setCart([]);
-    setManualProductNotes('');
-    setDate(new Date().toISOString().split('T')[0]);
+      // 4. Reset Form
+      setCustomerName('');
+      setTotalValue('');
+      setCart([]);
+      setManualProductNotes('');
+      setDate(new Date().toISOString().split('T')[0]);
+    } catch (error) {
+      console.error('❌ Erro ao registrar venda:', error);
+      toast.showError(`Erro ao registrar venda: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
+    }
   };
 
   // Filter sales based on search and date
