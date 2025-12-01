@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Clock, CheckCircle, Package, Truck } from 'lucide-react';
+import { Plus, Clock, CheckCircle, Package, Truck, Trash2 } from 'lucide-react';
 import { Order, OrderStatus } from '../types';
 import { StorageService } from '../services/storageService';
 
@@ -47,6 +47,16 @@ const OrdersTab: React.FC = () => {
     const updatedOrders = orders.map(o => o.id === id ? { ...o, status: newStatus } : o);
     setOrders(updatedOrders);
     StorageService.saveOrders(updatedOrders);
+  };
+
+  const handleDeleteOrder = (e: React.MouseEvent, id: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (window.confirm("Tem certeza que deseja excluir esta encomenda? Esta ação não pode ser desfeita.")) {
+      const updatedOrders = orders.filter(o => o.id !== id);
+      setOrders(updatedOrders);
+      StorageService.saveOrders(updatedOrders);
+    }
   };
 
   const getStatusColor = (status: OrderStatus) => {
@@ -134,7 +144,7 @@ const OrdersTab: React.FC = () => {
             
             <div className="space-y-3 flex-1">
               {orders.filter(o => o.status === status).map(order => (
-                <div key={order.id} className="bg-white p-3 rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
+                <div key={order.id} className="bg-white p-3 rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition-shadow relative">
                   <div className="flex justify-between items-start mb-2">
                     <span className="font-bold text-gray-800 text-sm truncate w-2/3">{order.customerName}</span>
                     <span className="text-xs text-gray-400">
@@ -148,30 +158,40 @@ const OrdersTab: React.FC = () => {
                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(order.estimatedValue)}
                     </span>
                     
-                    {/* Status Mover Controls */}
-                    <div className="flex gap-1">
-                      {status !== OrderStatus.PENDING && (
-                         <button 
-                           onClick={() => handleUpdateStatus(order.id, 
-                             status === OrderStatus.DELIVERED ? OrderStatus.COMPLETED : 
-                             status === OrderStatus.COMPLETED ? OrderStatus.IN_PROGRESS : OrderStatus.PENDING
-                           )}
-                           className="text-gray-400 hover:text-brand-500 p-1" title="Voltar"
-                         >
-                           ←
-                         </button>
-                      )}
-                      {status !== OrderStatus.DELIVERED && (
-                        <button 
-                          onClick={() => handleUpdateStatus(order.id, 
-                             status === OrderStatus.PENDING ? OrderStatus.IN_PROGRESS : 
-                             status === OrderStatus.IN_PROGRESS ? OrderStatus.COMPLETED : OrderStatus.DELIVERED
-                           )}
-                          className="text-gray-400 hover:text-brand-500 p-1" title="Avançar"
+                    <div className="flex items-center gap-1">
+                       <button
+                          type="button"
+                          onClick={(e) => handleDeleteOrder(e, order.id)}
+                          className="text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-full p-2 transition-colors z-10"
+                          title="Excluir Encomenda"
                         >
-                          →
+                          <Trash2 size={18} />
                         </button>
-                      )}
+                      {/* Status Mover Controls */}
+                      <div className="flex">
+                        {status !== OrderStatus.PENDING && (
+                          <button 
+                            onClick={() => handleUpdateStatus(order.id, 
+                              status === OrderStatus.DELIVERED ? OrderStatus.COMPLETED : 
+                              status === OrderStatus.COMPLETED ? OrderStatus.IN_PROGRESS : OrderStatus.PENDING
+                            )}
+                            className="text-gray-400 hover:text-brand-500 p-1" title="Voltar"
+                          >
+                            ←
+                          </button>
+                        )}
+                        {status !== OrderStatus.DELIVERED && (
+                          <button 
+                            onClick={() => handleUpdateStatus(order.id, 
+                              status === OrderStatus.PENDING ? OrderStatus.IN_PROGRESS : 
+                              status === OrderStatus.IN_PROGRESS ? OrderStatus.COMPLETED : OrderStatus.DELIVERED
+                            )}
+                            className="text-gray-400 hover:text-brand-500 p-1" title="Avançar"
+                          >
+                            →
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
