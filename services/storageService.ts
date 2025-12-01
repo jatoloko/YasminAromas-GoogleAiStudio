@@ -1,174 +1,120 @@
 import { InventoryItem, SaleItem, Order, Product } from '../types';
 import { SupabaseService } from './supabaseService';
 
-const KEYS = {
-  INVENTORY: 'yasmin_inventory',
-  SALES: 'yasmin_sales',
-  ORDERS: 'yasmin_orders',
-  PRODUCTS: 'yasmin_products',
-  MIGRATED: 'yasmin_migrated_to_supabase',
-};
-
-// Generic helper to get data from localStorage
-const getData = <T,>(key: string, defaultValue: T): T => {
-  try {
-    const item = localStorage.getItem(key);
-    return item ? JSON.parse(item) : defaultValue;
-  } catch (error) {
-    console.error(`Error reading ${key} from localStorage`, error);
-    return defaultValue;
-  }
-};
-
-// Generic helper to set data to localStorage
-const setData = <T,>(key: string, data: T): void => {
-  try {
-    localStorage.setItem(key, JSON.stringify(data));
-  } catch (error) {
-    console.error(`Error saving ${key} to localStorage`, error);
-  }
-};
-
-// Migrar dados do localStorage para Supabase (executar uma vez)
-const migrateToSupabase = async (): Promise<void> => {
-  const alreadyMigrated = getData(KEYS.MIGRATED, false);
-  if (alreadyMigrated || !SupabaseService.isAvailable()) return;
-
-  try {
-    const inventory = getData<InventoryItem[]>(KEYS.INVENTORY, []);
-    const sales = getData<SaleItem[]>(KEYS.SALES, []);
-    const orders = getData<Order[]>(KEYS.ORDERS, []);
-    const products = getData<Product[]>(KEYS.PRODUCTS, []);
-
-    if (inventory.length > 0) await SupabaseService.saveInventory(inventory);
-    if (sales.length > 0) await SupabaseService.saveSales(sales);
-    if (orders.length > 0) await SupabaseService.saveOrders(orders);
-    if (products.length > 0) await SupabaseService.saveProducts(products);
-
-    setData(KEYS.MIGRATED, true);
-    console.log('Migration to Supabase completed');
-  } catch (error) {
-    console.error('Error migrating to Supabase:', error);
-  }
-};
-
-// Executar migração na primeira carga
-let migrationPromise: Promise<void> | null = null;
-const ensureMigration = (): Promise<void> => {
-  if (!migrationPromise) {
-    migrationPromise = migrateToSupabase();
-  }
-  return migrationPromise;
-};
-
 export const StorageService = {
   // Inventory
-  async getInventory(): Promise<InventoryItem[]> {
-    await ensureMigration();
+  async getInventory(userId: string): Promise<InventoryItem[]> {
+    if (!userId) return [];
     
-    if (SupabaseService.isAvailable()) {
-      const supabaseData = await SupabaseService.getInventory();
-      if (supabaseData.length > 0) {
-        // Sincronizar com localStorage como backup
-        setData(KEYS.INVENTORY, supabaseData);
-        return supabaseData;
-      }
+    if (!SupabaseService.isAvailable()) {
+      console.warn('Supabase não disponível');
+      return [];
     }
-    
-    // Fallback para localStorage
-    return getData<InventoryItem[]>(KEYS.INVENTORY, []);
+
+    return await SupabaseService.getInventory(userId);
   },
 
-  async saveInventory(items: InventoryItem[]): Promise<void> {
-    // Salvar no localStorage primeiro (rápido)
-    setData(KEYS.INVENTORY, items);
-    
-    // Tentar salvar no Supabase (assíncrono)
-    if (SupabaseService.isAvailable()) {
-      await SupabaseService.saveInventory(items).catch(error => {
-        console.error('Failed to save inventory to Supabase, using localStorage only:', error);
-      });
+  async saveInventory(items: InventoryItem[], userId: string): Promise<void> {
+    if (!userId) {
+      console.error('UserId é obrigatório para salvar inventory');
+      return;
     }
+
+    if (!SupabaseService.isAvailable()) {
+      console.error('Supabase não disponível - não é possível salvar');
+      return;
+    }
+
+    await SupabaseService.saveInventory(items, userId).catch(error => {
+      console.error('Failed to save inventory to Supabase:', error);
+      throw error;
+    });
   },
 
   // Sales
-  async getSales(): Promise<SaleItem[]> {
-    await ensureMigration();
+  async getSales(userId: string): Promise<SaleItem[]> {
+    if (!userId) return [];
     
-    if (SupabaseService.isAvailable()) {
-      const supabaseData = await SupabaseService.getSales();
-      if (supabaseData.length > 0) {
-        setData(KEYS.SALES, supabaseData);
-        return supabaseData;
-      }
+    if (!SupabaseService.isAvailable()) {
+      console.warn('Supabase não disponível');
+      return [];
     }
-    
-    return getData<SaleItem[]>(KEYS.SALES, []);
+
+    return await SupabaseService.getSales(userId);
   },
 
-  async saveSales(items: SaleItem[]): Promise<void> {
-    setData(KEYS.SALES, items);
-    
-    if (SupabaseService.isAvailable()) {
-      await SupabaseService.saveSales(items).catch(error => {
-        console.error('Failed to save sales to Supabase, using localStorage only:', error);
-      });
+  async saveSales(items: SaleItem[], userId: string): Promise<void> {
+    if (!userId) {
+      console.error('UserId é obrigatório para salvar sales');
+      return;
     }
+
+    if (!SupabaseService.isAvailable()) {
+      console.error('Supabase não disponível - não é possível salvar');
+      return;
+    }
+
+    await SupabaseService.saveSales(items, userId).catch(error => {
+      console.error('Failed to save sales to Supabase:', error);
+      throw error;
+    });
   },
 
   // Orders
-  async getOrders(): Promise<Order[]> {
-    await ensureMigration();
+  async getOrders(userId: string): Promise<Order[]> {
+    if (!userId) return [];
     
-    if (SupabaseService.isAvailable()) {
-      const supabaseData = await SupabaseService.getOrders();
-      if (supabaseData.length > 0) {
-        setData(KEYS.ORDERS, supabaseData);
-        return supabaseData;
-      }
+    if (!SupabaseService.isAvailable()) {
+      console.warn('Supabase não disponível');
+      return [];
     }
-    
-    return getData<Order[]>(KEYS.ORDERS, []);
+
+    return await SupabaseService.getOrders(userId);
   },
 
-  async saveOrders(items: Order[]): Promise<void> {
-    setData(KEYS.ORDERS, items);
-    
-    if (SupabaseService.isAvailable()) {
-      await SupabaseService.saveOrders(items).catch(error => {
-        console.error('Failed to save orders to Supabase, using localStorage only:', error);
-      });
+  async saveOrders(items: Order[], userId: string): Promise<void> {
+    if (!userId) {
+      console.error('UserId é obrigatório para salvar orders');
+      return;
     }
+
+    if (!SupabaseService.isAvailable()) {
+      console.error('Supabase não disponível - não é possível salvar');
+      return;
+    }
+
+    await SupabaseService.saveOrders(items, userId).catch(error => {
+      console.error('Failed to save orders to Supabase:', error);
+      throw error;
+    });
   },
 
   // Products
-  async getProducts(): Promise<Product[]> {
-    await ensureMigration();
+  async getProducts(userId: string): Promise<Product[]> {
+    if (!userId) return [];
     
-    if (SupabaseService.isAvailable()) {
-      const supabaseData = await SupabaseService.getProducts();
-      if (supabaseData.length > 0) {
-        setData(KEYS.PRODUCTS, supabaseData);
-        return supabaseData;
-      }
+    if (!SupabaseService.isAvailable()) {
+      console.warn('Supabase não disponível');
+      return [];
     }
-    
-    return getData<Product[]>(KEYS.PRODUCTS, []);
+
+    return await SupabaseService.getProducts(userId);
   },
 
-  async saveProducts(items: Product[]): Promise<void> {
-    setData(KEYS.PRODUCTS, items);
-    
-    if (SupabaseService.isAvailable()) {
-      await SupabaseService.saveProducts(items).catch(error => {
-        console.error('Failed to save products to Supabase, using localStorage only:', error);
-      });
+  async saveProducts(items: Product[], userId: string): Promise<void> {
+    if (!userId) {
+      console.error('UserId é obrigatório para salvar products');
+      return;
     }
-  },
 
-  // Métodos síncronos para compatibilidade (usar localStorage apenas)
-  getInventorySync: (): InventoryItem[] => getData(KEYS.INVENTORY, []),
-  getSalesSync: (): SaleItem[] => getData(KEYS.SALES, []),
-  getOrdersSync: (): Order[] => getData(KEYS.ORDERS, []),
-  getProductsSync: (): Product[] => getData(KEYS.PRODUCTS, []),
+    if (!SupabaseService.isAvailable()) {
+      console.error('Supabase não disponível - não é possível salvar');
+      return;
+    }
+
+    await SupabaseService.saveProducts(items, userId).catch(error => {
+      console.error('Failed to save products to Supabase:', error);
+      throw error;
+    });
+  },
 };

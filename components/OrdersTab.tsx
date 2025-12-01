@@ -3,9 +3,11 @@ import { Plus, Clock, CheckCircle, Package, Truck, Trash2, Edit2, Search } from 
 import { Order, OrderStatus } from '../types';
 import { StorageService } from '../services/storageService';
 import { useToast } from '../contexts/ToastContext';
+import { useAuth } from '../contexts/AuthContext';
 
 const OrdersTab: React.FC = () => {
   const toast = useToast();
+  const { user } = useAuth();
   const [orders, setOrders] = useState<Order[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
@@ -20,12 +22,14 @@ const OrdersTab: React.FC = () => {
   });
 
   useEffect(() => {
+    if (!user?.id) return;
+    
     const loadData = async () => {
-      const data = await StorageService.getOrders();
+      const data = await StorageService.getOrders(user.id);
       setOrders(data);
     };
     loadData();
-  }, []);
+  }, [user?.id]);
 
   const handleAddOrder = async () => {
     if (!newOrder.customerName || !newOrder.description) return;
@@ -60,8 +64,10 @@ const OrdersTab: React.FC = () => {
     }
 
     setOrders(updatedOrders);
-    await StorageService.saveOrders(updatedOrders);
-    toast.showSuccess(editingOrder ? 'Encomenda atualizada com sucesso!' : 'Encomenda criada com sucesso!');
+    if (user?.id) {
+      await StorageService.saveOrders(updatedOrders, user.id);
+      toast.showSuccess(editingOrder ? 'Encomenda atualizada com sucesso!' : 'Encomenda criada com sucesso!');
+    }
     setNewOrder({
       customerName: '',
       description: '',
@@ -100,7 +106,9 @@ const OrdersTab: React.FC = () => {
   const handleUpdateStatus = async (id: string, newStatus: OrderStatus) => {
     const updatedOrders = orders.map(o => o.id === id ? { ...o, status: newStatus } : o);
     setOrders(updatedOrders);
-    await StorageService.saveOrders(updatedOrders);
+    if (user?.id) {
+      await StorageService.saveOrders(updatedOrders, user.id);
+    }
   };
 
   const handleDeleteOrder = async (e: React.MouseEvent, id: string) => {
@@ -109,8 +117,10 @@ const OrdersTab: React.FC = () => {
     if (window.confirm("Tem certeza que deseja excluir esta encomenda? Esta ação não pode ser desfeita.")) {
       const updatedOrders = orders.filter(o => o.id !== id);
       setOrders(updatedOrders);
-      await StorageService.saveOrders(updatedOrders);
-      toast.showSuccess('Encomenda excluída com sucesso!');
+      if (user?.id) {
+        await StorageService.saveOrders(updatedOrders, user.id);
+        toast.showSuccess('Encomenda excluída com sucesso!');
+      }
     }
   };
 

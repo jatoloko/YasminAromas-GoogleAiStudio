@@ -118,8 +118,8 @@ const convertProductToDB = (item: Product): any => ({
 
 export const SupabaseService = {
   // Inventory
-  async getInventory(): Promise<InventoryItem[]> {
-    if (!isSupabaseAvailable()) return [];
+  async getInventory(userId: string): Promise<InventoryItem[]> {
+    if (!isSupabaseAvailable() || !userId) return [];
     
     const client = initializeSupabase();
     if (!client) return [];
@@ -128,6 +128,7 @@ export const SupabaseService = {
       const { data, error } = await client
         .from('inventory')
         .select('*')
+        .eq('user_id', userId)
         .order('name');
       
       if (error) throw error;
@@ -138,17 +139,17 @@ export const SupabaseService = {
     }
   },
 
-  async saveInventory(items: InventoryItem[]): Promise<boolean> {
-    if (!isSupabaseAvailable()) return false;
+  async saveInventory(items: InventoryItem[], userId: string): Promise<boolean> {
+    if (!isSupabaseAvailable() || !userId) return false;
     
     const client = initializeSupabase();
     if (!client) return false;
     
     try {
-      // Deletar todos os itens existentes e inserir os novos
-      // (Para simplificar, podemos fazer upsert por item)
+      // Deletar todos os itens existentes do usuário e inserir os novos
       for (const item of items) {
         const dbItem = convertInventoryToDB(item);
+        dbItem.user_id = userId;
         const { error } = await client
         .from('inventory')
         .upsert(dbItem, { onConflict: 'id' });
@@ -160,7 +161,8 @@ export const SupabaseService = {
       const currentIds = items.map(i => i.id);
       const { data: existing } = await client
         .from('inventory')
-        .select('id');
+        .select('id')
+        .eq('user_id', userId);
       
       if (existing) {
         const toDelete = existing
@@ -171,7 +173,8 @@ export const SupabaseService = {
           await client
             .from('inventory')
             .delete()
-            .in('id', toDelete);
+            .in('id', toDelete)
+            .eq('user_id', userId);
         }
       }
       
@@ -183,8 +186,8 @@ export const SupabaseService = {
   },
 
   // Sales
-  async getSales(): Promise<SaleItem[]> {
-    if (!isSupabaseAvailable()) return [];
+  async getSales(userId: string): Promise<SaleItem[]> {
+    if (!isSupabaseAvailable() || !userId) return [];
     
     try {
       const client = initializeSupabase();
@@ -192,6 +195,7 @@ export const SupabaseService = {
       const { data, error } = await client
         .from('sales')
         .select('*')
+        .eq('user_id', userId)
         .order('date', { ascending: false });
       
       if (error) throw error;
@@ -202,8 +206,8 @@ export const SupabaseService = {
     }
   },
 
-  async saveSales(items: SaleItem[]): Promise<boolean> {
-    if (!isSupabaseAvailable()) return false;
+  async saveSales(items: SaleItem[], userId: string): Promise<boolean> {
+    if (!isSupabaseAvailable() || !userId) return false;
     
     const client = initializeSupabase();
     if (!client) return false;
@@ -211,6 +215,7 @@ export const SupabaseService = {
     try {
       for (const item of items) {
         const dbItem = convertSaleToDB(item);
+        dbItem.user_id = userId;
         const { error } = await client
           .from('sales')
           .upsert(dbItem, { onConflict: 'id' });
@@ -226,8 +231,8 @@ export const SupabaseService = {
   },
 
   // Orders
-  async getOrders(): Promise<Order[]> {
-    if (!isSupabaseAvailable()) return [];
+  async getOrders(userId: string): Promise<Order[]> {
+    if (!isSupabaseAvailable() || !userId) return [];
     
     try {
       const client = initializeSupabase();
@@ -235,6 +240,7 @@ export const SupabaseService = {
       const { data, error } = await client
         .from('orders')
         .select('*')
+        .eq('user_id', userId)
         .order('deadline', { ascending: true });
       
       if (error) throw error;
@@ -245,8 +251,8 @@ export const SupabaseService = {
     }
   },
 
-  async saveOrders(items: Order[]): Promise<boolean> {
-    if (!isSupabaseAvailable()) return false;
+  async saveOrders(items: Order[], userId: string): Promise<boolean> {
+    if (!isSupabaseAvailable() || !userId) return false;
     
     const client = initializeSupabase();
     if (!client) return false;
@@ -254,6 +260,7 @@ export const SupabaseService = {
     try {
       for (const item of items) {
         const dbItem = convertOrderToDB(item);
+        dbItem.user_id = userId;
         const { error } = await client
           .from('orders')
           .upsert(dbItem, { onConflict: 'id' });
@@ -269,8 +276,8 @@ export const SupabaseService = {
   },
 
   // Products
-  async getProducts(): Promise<Product[]> {
-    if (!isSupabaseAvailable()) return [];
+  async getProducts(userId: string): Promise<Product[]> {
+    if (!isSupabaseAvailable() || !userId) return [];
     
     try {
       const client = initializeSupabase();
@@ -278,6 +285,7 @@ export const SupabaseService = {
       const { data, error } = await client
         .from('products')
         .select('*')
+        .eq('user_id', userId)
         .order('name');
       
       if (error) throw error;
@@ -288,8 +296,8 @@ export const SupabaseService = {
     }
   },
 
-  async saveProducts(items: Product[]): Promise<boolean> {
-    if (!isSupabaseAvailable()) return false;
+  async saveProducts(items: Product[], userId: string): Promise<boolean> {
+    if (!isSupabaseAvailable() || !userId) return false;
     
     const client = initializeSupabase();
     if (!client) return false;
@@ -297,6 +305,7 @@ export const SupabaseService = {
     try {
       for (const item of items) {
         const dbItem = convertProductToDB(item);
+        dbItem.user_id = userId;
         const { error } = await client
           .from('products')
           .upsert(dbItem, { onConflict: 'id' });

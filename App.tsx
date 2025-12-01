@@ -1,5 +1,7 @@
 import React, { useState, Suspense } from 'react';
-import { LayoutDashboard, ShoppingBag, Package, Calculator, Tag, Menu, X, Sparkles } from 'lucide-react';
+import { LayoutDashboard, ShoppingBag, Package, Calculator, Tag, Menu, X, Sparkles, LogOut } from 'lucide-react';
+import { useAuth } from './contexts/AuthContext';
+import LoginPage from './components/LoginPage';
 
 // Lazy load components para reduzir bundle inicial e evitar problemas de inicialização
 const SalesTab = React.lazy(() => import('./components/SalesTab'));
@@ -20,6 +22,7 @@ enum Tab {
 }
 
 const App: React.FC = () => {
+  const { user, loading, signOut } = useAuth();
   const [activeTab, setActiveTab] = useState<Tab>(Tab.SALES);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
@@ -27,6 +30,22 @@ const App: React.FC = () => {
   React.useEffect(() => {
     console.log('✅ App component montado com sucesso');
   }, []);
+
+  // Mostrar tela de login se não autenticado
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-12 h-12 border-4 border-brand-200 border-t-brand-500 rounded-full animate-spin"></div>
+          <p className="text-gray-600">Carregando...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <LoginPage />;
+  }
 
   const menuItems = [
     { id: Tab.SALES, label: 'Minhas Vendas', icon: LayoutDashboard },
@@ -86,8 +105,21 @@ const App: React.FC = () => {
           ))}
         </ul>
       </nav>
-      <div className="p-4 mt-auto">
-        <p className="text-xs text-center text-gray-400">v1.0.0 • YasminAromas</p>
+      <div className="p-4 mt-auto border-t border-gray-200">
+          <div className="mb-3 px-3 py-2 bg-gray-50 rounded-lg">
+            <p className="text-xs text-gray-500 mb-1">Conectado como</p>
+            <p className="text-sm font-medium text-gray-800 truncate">{user.username}</p>
+          </div>
+        <button
+          onClick={async () => {
+            await signOut();
+          }}
+          className="w-full flex items-center gap-3 p-3 rounded-lg text-left transition-colors text-red-600 hover:bg-red-50"
+        >
+          <LogOut className="w-5 h-5" />
+          <span>Sair</span>
+        </button>
+        <p className="text-xs text-center text-gray-400 mt-4">v1.0.0 • YasminAromas</p>
       </div>
     </div>
   );
@@ -125,13 +157,22 @@ const App: React.FC = () => {
 
       {/* Main Content */}
       <main className="flex-1 overflow-y-auto">
-        <header className="sticky top-0 bg-white/80 backdrop-blur-sm z-10 p-4 border-b border-gray-200 flex items-center lg:hidden">
+        <header className="sticky top-0 bg-white/80 backdrop-blur-sm z-10 p-4 border-b border-gray-200 flex items-center justify-between lg:hidden">
           <button onClick={() => setIsMenuOpen(true)} className="text-gray-500">
             <Menu className="h-6 w-6" />
           </button>
           <div className="flex-1 text-center">
             <h1 className="text-lg font-bold text-brand-800">YasminAromas</h1>
           </div>
+          <button
+            onClick={async () => {
+              await signOut();
+            }}
+            className="text-gray-500 hover:text-red-600"
+            title="Sair"
+          >
+            <LogOut className="h-5 w-5" />
+          </button>
         </header>
         <div className="p-4 md:p-6 lg:p-8">
           <Suspense fallback={

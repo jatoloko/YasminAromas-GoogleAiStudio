@@ -3,6 +3,7 @@ import { Plus, TrendingUp, DollarSign, Calendar, Trash2, ShoppingCart, Tag, Pack
 import { SaleItem, InventoryItem, Product } from '../types';
 import { StorageService } from '../services/storageService';
 import { useToast } from '../contexts/ToastContext';
+import { useAuth } from '../contexts/AuthContext';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 
 type CartItemType = 'PRODUCT' | 'INVENTORY_ITEM';
@@ -17,6 +18,7 @@ interface CartItem {
 
 const SalesTab: React.FC = () => {
   const toast = useToast();
+  const { user } = useAuth();
   const [sales, setSales] = useState<SaleItem[]>([]);
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -37,18 +39,20 @@ const SalesTab: React.FC = () => {
   const [periodFilter, setPeriodFilter] = useState<string>('week');
 
   useEffect(() => {
+    if (!user?.id) return;
+    
     const loadData = async () => {
       const [salesData, inventoryData, productsData] = await Promise.all([
-        StorageService.getSales(),
-        StorageService.getInventory(),
-        StorageService.getProducts()
+        StorageService.getSales(user.id),
+        StorageService.getInventory(user.id),
+        StorageService.getProducts(user.id)
       ]);
       setSales(salesData);
       setInventory(inventoryData);
       setProducts(productsData);
     };
     loadData();
-  }, []);
+  }, [user?.id]);
 
   // Update total value whenever cart changes
   useEffect(() => {
@@ -148,8 +152,10 @@ const SalesTab: React.FC = () => {
         }
       });
 
-      await StorageService.saveInventory(currentInventory);
-      setInventory(currentInventory); 
+      if (user?.id) {
+        await StorageService.saveInventory(currentInventory, user.id);
+        setInventory(currentInventory);
+      } 
     }
 
     // 3. Save Sale
@@ -163,8 +169,10 @@ const SalesTab: React.FC = () => {
 
     const updatedSales = [saleToAdd, ...sales];
     setSales(updatedSales);
-    await StorageService.saveSales(updatedSales);
-    toast.showSuccess('Venda registrada com sucesso!');
+    if (user?.id) {
+      await StorageService.saveSales(updatedSales, user.id);
+      toast.showSuccess('Venda registrada com sucesso!');
+    }
 
     // 4. Reset Form
     setCustomerName('');

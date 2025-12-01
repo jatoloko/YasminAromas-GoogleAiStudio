@@ -3,9 +3,11 @@ import { Plus, Trash2, AlertTriangle, Package, X, Edit2, Search, Filter } from '
 import { InventoryItem, UnitType } from '../types';
 import { StorageService } from '../services/storageService';
 import { useToast } from '../contexts/ToastContext';
+import { useAuth } from '../contexts/AuthContext';
 
 const InventoryTab: React.FC = () => {
   const toast = useToast();
+  const { user } = useAuth();
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [newItem, setNewItem] = useState<Partial<InventoryItem>>({
     name: '',
@@ -20,12 +22,14 @@ const InventoryTab: React.FC = () => {
   const [filterCategory, setFilterCategory] = useState<string>('all');
 
   useEffect(() => {
+    if (!user?.id) return;
+    
     const loadData = async () => {
-      const data = await StorageService.getInventory();
+      const data = await StorageService.getInventory(user.id);
       setItems(data);
     };
     loadData();
-  }, []);
+  }, [user?.id]);
 
   const handleAddItem = async () => {
     if (!newItem.name || newItem.quantity === undefined) return;
@@ -61,8 +65,10 @@ const InventoryTab: React.FC = () => {
     }
 
     setItems(updatedItems);
-    await StorageService.saveInventory(updatedItems);
-    toast.showSuccess(existingItemIndex >= 0 ? 'Item atualizado com sucesso!' : 'Item adicionado com sucesso!');
+    if (user?.id) {
+      await StorageService.saveInventory(updatedItems, user.id);
+      toast.showSuccess(existingItemIndex >= 0 ? 'Item atualizado com sucesso!' : 'Item adicionado com sucesso!');
+    }
     
     // Reset form
     setNewItem({ name: '', category: 'Cera', quantity: 0, unit: UnitType.KILOGRAMS, minThreshold: 1 });
@@ -73,8 +79,10 @@ const InventoryTab: React.FC = () => {
     if (!confirm('Tem certeza que deseja excluir este item?')) return;
     const updatedItems = items.filter(i => i.id !== id);
     setItems(updatedItems);
-    await StorageService.saveInventory(updatedItems);
-    toast.showSuccess('Item excluído com sucesso!');
+    if (user?.id) {
+      await StorageService.saveInventory(updatedItems, user.id);
+      toast.showSuccess('Item excluído com sucesso!');
+    }
   };
 
   const handleEditItem = (item: InventoryItem) => {
@@ -105,8 +113,10 @@ const InventoryTab: React.FC = () => {
     );
 
     setItems(updatedItems);
-    await StorageService.saveInventory(updatedItems);
-    toast.showSuccess('Item atualizado com sucesso!');
+    if (user?.id) {
+      await StorageService.saveInventory(updatedItems, user.id);
+      toast.showSuccess('Item atualizado com sucesso!');
+    }
     setEditingItem(null);
     setNewItem({ name: '', category: 'Cera', quantity: 0, unit: UnitType.KILOGRAMS, minThreshold: 1 });
     setIsCustomCategory(false);

@@ -3,9 +3,11 @@ import { Plus, Trash2, Package, Save, Beaker, X, Edit2, Search } from 'lucide-re
 import { InventoryItem, Product, ProductRecipeItem } from '../types';
 import { StorageService } from '../services/storageService';
 import { useToast } from '../contexts/ToastContext';
+import { useAuth } from '../contexts/AuthContext';
 
 const ProductsTab: React.FC = () => {
   const toast = useToast();
+  const { user } = useAuth();
   const [products, setProducts] = useState<Product[]>([]);
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [showForm, setShowForm] = useState(false);
@@ -22,16 +24,18 @@ const ProductsTab: React.FC = () => {
   const [ingredientQty, setIngredientQty] = useState<number | ''>('');
 
   useEffect(() => {
+    if (!user?.id) return;
+    
     const loadData = async () => {
       const [productsData, inventoryData] = await Promise.all([
-        StorageService.getProducts(),
-        StorageService.getInventory()
+        StorageService.getProducts(user.id),
+        StorageService.getInventory(user.id)
       ]);
       setProducts(productsData);
       setInventory(inventoryData);
     };
     loadData();
-  }, []);
+  }, [user?.id]);
 
   const handleAddIngredient = () => {
     if (!selectedIngredientId || !ingredientQty) return;
@@ -83,8 +87,10 @@ const ProductsTab: React.FC = () => {
     }
 
     setProducts(updatedProducts);
-    await StorageService.saveProducts(updatedProducts);
-    toast.showSuccess(editingProduct ? 'Produto atualizado com sucesso!' : 'Produto cadastrado com sucesso!');
+    if (user?.id) {
+      await StorageService.saveProducts(updatedProducts, user.id);
+      toast.showSuccess(editingProduct ? 'Produto atualizado com sucesso!' : 'Produto cadastrado com sucesso!');
+    }
 
     // Reset Form
     setNewProductName('');
@@ -114,8 +120,10 @@ const ProductsTab: React.FC = () => {
     if (confirm("Tem certeza que deseja excluir este produto?")) {
       const updated = products.filter(p => p.id !== id);
       setProducts(updated);
-      await StorageService.saveProducts(updated);
-      toast.showSuccess('Produto excluído com sucesso!');
+      if (user?.id) {
+        await StorageService.saveProducts(updated, user.id);
+        toast.showSuccess('Produto excluído com sucesso!');
+      }
     }
   };
 
