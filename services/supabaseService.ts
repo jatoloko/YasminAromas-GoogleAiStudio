@@ -5,10 +5,27 @@ import { InventoryItem, SaleItem, Order, Product } from '../types';
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 
+// Debug
+if (typeof window !== 'undefined') {
+  console.log('🔍 Supabase Service - Debug:', {
+    hasUrl: !!supabaseUrl,
+    hasKey: !!supabaseAnonKey,
+    urlLength: supabaseUrl.length,
+    keyLength: supabaseAnonKey.length,
+  });
+}
+
 let supabase: SupabaseClient | null = null;
 
 if (supabaseUrl && supabaseAnonKey) {
-  supabase = createClient(supabaseUrl, supabaseAnonKey);
+  try {
+    supabase = createClient(supabaseUrl, supabaseAnonKey);
+    console.log('✅ Cliente Supabase inicializado com sucesso');
+  } catch (error) {
+    console.error('❌ Erro ao inicializar cliente Supabase:', error);
+  }
+} else {
+  console.warn('⚠️ Supabase não configurado - usando apenas localStorage');
 }
 
 // Verificar se Supabase está disponível

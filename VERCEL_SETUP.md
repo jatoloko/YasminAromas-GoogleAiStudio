@@ -62,34 +62,46 @@ O Vercel deve detectar automaticamente que é um projeto Vite, mas verifique:
 
 ### Problema: Tela branca após deploy
 
-**Soluções:**
+**Soluções (em ordem de prioridade):**
 
-1. **Verificar Console do Navegador:**
+1. **Verificar Console do Navegador (PRIMEIRO PASSO):**
    - Abra DevTools (F12)
-   - Vá na aba Console
-   - Procure por erros em vermelho
-   - Verifique a aba Network para erros de carregamento
+   - Vá na aba **Console**
+   - Procure por mensagens de debug que começam com:
+     - `🔍 Debug - Variáveis de ambiente:` - Verifica se as env vars estão configuradas
+     - `✅ Elemento root encontrado` - Confirma que o DOM está OK
+     - `✅ Aplicação renderizada com sucesso!` - Confirma que o React renderizou
+     - `✅ App component montado` - Confirma que o App carregou
+     - `✅ Cliente Supabase inicializado` - Confirma que Supabase está OK
+   - Se ver `❌` ou erros em vermelho, anote a mensagem
 
 2. **Verificar Variáveis de Ambiente:**
-   - Certifique-se de que todas as variáveis estão configuradas
+   - Certifique-se de que todas as variáveis estão configuradas no Vercel
    - As variáveis devem começar com `VITE_` para serem expostas no cliente
-   - Reinicie o deploy após adicionar variáveis
-   - **IMPORTANTE:** No Vercel, adicione as variáveis e faça um novo deploy
+   - **IMPORTANTE:** Após adicionar variáveis, você DEVE fazer um novo deploy
+   - No console, verifique se aparece `✅ Configurada` para cada variável
 
 3. **Verificar Build Logs:**
    - No painel do Vercel, vá em **Deployments**
    - Clique no último deployment
    - Veja os logs de build para erros
-   - Verifique se o build completou com sucesso
+   - Verifique se o build completou com sucesso (deve terminar com "Build Completed")
 
 4. **Verificar se o Build Funciona Localmente:**
    ```bash
    npm run build
    npm run preview
    ```
-   Se não funcionar localmente, corrija os erros antes de fazer deploy
+   - Se funcionar localmente mas não no Vercel, é problema de configuração
+   - Se não funcionar localmente, corrija os erros primeiro
 
-5. **Problemas Comuns:**
+5. **Verificar Network Tab:**
+   - No DevTools, vá na aba **Network**
+   - Recarregue a página
+   - Verifique se há requisições falhando (vermelho)
+   - Verifique se os arquivos JS estão carregando (index.tsx, App.js, etc.)
+
+6. **Problemas Comuns:**
 
    **Erro: "Cannot read property of undefined"**
    - Verifique se as variáveis de ambiente estão configuradas

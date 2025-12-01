@@ -18,6 +18,11 @@ enum Tab {
 }
 
 const App: React.FC = () => {
+  // Debug: Verificar se o componente está sendo renderizado
+  React.useEffect(() => {
+    console.log('✅ App component montado com sucesso');
+  }, []);
+
   const [activeTab, setActiveTab] = useState<Tab>(Tab.SALES);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
