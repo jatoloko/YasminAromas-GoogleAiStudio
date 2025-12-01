@@ -1,23 +1,35 @@
 import { GoogleGenAI } from "@google/genai";
 
-// Safely access process.env.API_KEY to avoid crashing in browser environments where process is undefined
-const apiKey = (typeof process !== 'undefined' && process.env && process.env.API_KEY) || '';
+// Usar import.meta.env que é o padrão do Vite (não process.env)
+// Vite expõe automaticamente variáveis que começam com VITE_
+// Mas para GEMINI_API_KEY, precisamos usar o define do vite.config.ts
+const apiKey = import.meta.env.GEMINI_API_KEY || 
+               (typeof process !== 'undefined' && process.env && process.env.GEMINI_API_KEY) || '';
 
-// Initialize Gemini
-// We only initialize if key is present to avoid immediate errors, 
-// though actual calls will fail gracefully if key is missing.
+// Initialize Gemini com lazy initialization para evitar problemas de ordem
 let ai: GoogleGenAI | null = null;
-if (apiKey) {
-  ai = new GoogleGenAI({ apiKey });
-}
+
+const getAI = (): GoogleGenAI | null => {
+  if (!ai && apiKey) {
+    try {
+      ai = new GoogleGenAI({ apiKey });
+      console.log('✅ Gemini AI inicializado com sucesso');
+    } catch (error) {
+      console.error('❌ Erro ao inicializar Gemini AI:', error);
+    }
+  }
+  return ai;
+};
 
 export const generateCreativeContent = async (prompt: string): Promise<string> => {
-  if (!ai) {
-    return "Erro: Chave de API não configurada. Por favor, configure a variável de ambiente API_KEY.";
+  const aiInstance = getAI();
+  
+  if (!aiInstance) {
+    return "Erro: Chave de API não configurada. Por favor, configure a variável de ambiente GEMINI_API_KEY.";
   }
 
   try {
-    const response = await ai.models.generateContent({
+    const response = await aiInstance.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: prompt,
       config: {

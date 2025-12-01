@@ -1,36 +1,52 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { InventoryItem, SaleItem, Order, Product } from '../types';
 
-// Inicializar cliente Supabase
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
-
-// Debug
-if (typeof window !== 'undefined') {
-  console.log('🔍 Supabase Service - Debug:', {
-    hasUrl: !!supabaseUrl,
-    hasKey: !!supabaseAnonKey,
-    urlLength: supabaseUrl.length,
-    keyLength: supabaseAnonKey.length,
-  });
-}
-
+// Lazy initialization do cliente Supabase para evitar problemas de ordem
 let supabase: SupabaseClient | null = null;
+let supabaseInitialized = false;
 
-if (supabaseUrl && supabaseAnonKey) {
-  try {
-    supabase = createClient(supabaseUrl, supabaseAnonKey);
-    console.log('✅ Cliente Supabase inicializado com sucesso');
-  } catch (error) {
-    console.error('❌ Erro ao inicializar cliente Supabase:', error);
+// Função para inicializar o cliente Supabase de forma lazy
+const initializeSupabase = (): SupabaseClient | null => {
+  if (supabaseInitialized) {
+    return supabase;
   }
-} else {
-  console.warn('⚠️ Supabase não configurado - usando apenas localStorage');
-}
+
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
+  const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+
+  // Debug
+  if (typeof window !== 'undefined') {
+    console.log('🔍 Supabase Service - Debug:', {
+      hasUrl: !!supabaseUrl,
+      hasKey: !!supabaseAnonKey,
+      urlLength: supabaseUrl.length,
+      keyLength: supabaseAnonKey.length,
+    });
+  }
+
+  if (supabaseUrl && supabaseAnonKey) {
+    try {
+      supabase = createClient(supabaseUrl, supabaseAnonKey);
+      supabaseInitialized = true;
+      console.log('✅ Cliente Supabase inicializado com sucesso');
+    } catch (error) {
+      console.error('❌ Erro ao inicializar cliente Supabase:', error);
+      supabaseInitialized = true; // Marcar como inicializado mesmo em erro para não tentar novamente
+    }
+  } else {
+    console.warn('⚠️ Supabase não configurado - usando apenas localStorage');
+    supabaseInitialized = true;
+  }
+
+  return supabase;
+};
 
 // Verificar se Supabase está disponível
 const isSupabaseAvailable = (): boolean => {
-  return supabase !== null && !!supabaseUrl && !!supabaseAnonKey;
+  const client = initializeSupabase();
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
+  const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+  return client !== null && !!supabaseUrl && !!supabaseAnonKey;
 };
 
 // Converter tipos do app para tipos do Supabase
@@ -105,8 +121,11 @@ export const SupabaseService = {
   async getInventory(): Promise<InventoryItem[]> {
     if (!isSupabaseAvailable()) return [];
     
+    const client = initializeSupabase();
+    if (!client) return [];
+    
     try {
-      const { data, error } = await supabase!
+      const { data, error } = await client
         .from('inventory')
         .select('*')
         .order('name');
@@ -122,21 +141,24 @@ export const SupabaseService = {
   async saveInventory(items: InventoryItem[]): Promise<boolean> {
     if (!isSupabaseAvailable()) return false;
     
+    const client = initializeSupabase();
+    if (!client) return false;
+    
     try {
       // Deletar todos os itens existentes e inserir os novos
       // (Para simplificar, podemos fazer upsert por item)
       for (const item of items) {
         const dbItem = convertInventoryToDB(item);
-        const { error } = await supabase!
-          .from('inventory')
-          .upsert(dbItem, { onConflict: 'id' });
+        const { error } = await client
+        .from('inventory')
+        .upsert(dbItem, { onConflict: 'id' });
         
         if (error) throw error;
       }
       
       // Remover itens que não estão mais na lista
       const currentIds = items.map(i => i.id);
-      const { data: existing } = await supabase!
+      const { data: existing } = await client
         .from('inventory')
         .select('id');
       
@@ -146,7 +168,7 @@ export const SupabaseService = {
           .filter(id => !currentIds.includes(id));
         
         if (toDelete.length > 0) {
-          await supabase!
+          await client
             .from('inventory')
             .delete()
             .in('id', toDelete);
@@ -165,7 +187,9 @@ export const SupabaseService = {
     if (!isSupabaseAvailable()) return [];
     
     try {
-      const { data, error } = await supabase!
+      const client = initializeSupabase();
+      if (!client) return [];
+      const { data, error } = await client
         .from('sales')
         .select('*')
         .order('date', { ascending: false });
@@ -181,10 +205,13 @@ export const SupabaseService = {
   async saveSales(items: SaleItem[]): Promise<boolean> {
     if (!isSupabaseAvailable()) return false;
     
+    const client = initializeSupabase();
+    if (!client) return false;
+    
     try {
       for (const item of items) {
         const dbItem = convertSaleToDB(item);
-        const { error } = await supabase!
+        const { error } = await client
           .from('sales')
           .upsert(dbItem, { onConflict: 'id' });
         
@@ -203,7 +230,9 @@ export const SupabaseService = {
     if (!isSupabaseAvailable()) return [];
     
     try {
-      const { data, error } = await supabase!
+      const client = initializeSupabase();
+      if (!client) return [];
+      const { data, error } = await client
         .from('orders')
         .select('*')
         .order('deadline', { ascending: true });
@@ -219,10 +248,13 @@ export const SupabaseService = {
   async saveOrders(items: Order[]): Promise<boolean> {
     if (!isSupabaseAvailable()) return false;
     
+    const client = initializeSupabase();
+    if (!client) return false;
+    
     try {
       for (const item of items) {
         const dbItem = convertOrderToDB(item);
-        const { error } = await supabase!
+        const { error } = await client
           .from('orders')
           .upsert(dbItem, { onConflict: 'id' });
         
@@ -241,7 +273,9 @@ export const SupabaseService = {
     if (!isSupabaseAvailable()) return [];
     
     try {
-      const { data, error } = await supabase!
+      const client = initializeSupabase();
+      if (!client) return [];
+      const { data, error } = await client
         .from('products')
         .select('*')
         .order('name');
@@ -257,10 +291,13 @@ export const SupabaseService = {
   async saveProducts(items: Product[]): Promise<boolean> {
     if (!isSupabaseAvailable()) return false;
     
+    const client = initializeSupabase();
+    if (!client) return false;
+    
     try {
       for (const item of items) {
         const dbItem = convertProductToDB(item);
-        const { error } = await supabase!
+        const { error } = await client
           .from('products')
           .upsert(dbItem, { onConflict: 'id' });
         

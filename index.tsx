@@ -5,10 +5,11 @@ import { ToastProvider } from './contexts/ToastContext';
 import ErrorBoundary from './components/ErrorBoundary';
 
 // Debug: Verificar variáveis de ambiente
+// IMPORTANTE: process.env não está disponível no browser, usar apenas import.meta.env
 console.log('🔍 Debug - Variáveis de ambiente:', {
   VITE_SUPABASE_URL: import.meta.env.VITE_SUPABASE_URL ? '✅ Configurada' : '❌ Não configurada',
   VITE_SUPABASE_ANON_KEY: import.meta.env.VITE_SUPABASE_ANON_KEY ? '✅ Configurada' : '❌ Não configurada',
-  GEMINI_API_KEY: import.meta.env.GEMINI_API_KEY || process.env.GEMINI_API_KEY ? '✅ Configurada' : '❌ Não configurada',
+  GEMINI_API_KEY: import.meta.env.GEMINI_API_KEY ? '✅ Configurada' : '❌ Não configurada',
   MODE: import.meta.env.MODE,
 });
 

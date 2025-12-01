@@ -12,10 +12,13 @@ export default defineConfig(({ mode }) => {
       },
       plugins: [react()],
       // Vite já expõe automaticamente variáveis que começam com VITE_ via import.meta.env
-      // Não precisamos definir manualmente
+      // Para GEMINI_API_KEY, precisamos expor manualmente via define
       define: {
-        'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY || ''),
         'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY || ''),
+        'import.meta.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY || ''),
+      },
+      optimizeDeps: {
+        include: ['react', 'react-dom', '@supabase/supabase-js'],
       },
       resolve: {
         alias: {
