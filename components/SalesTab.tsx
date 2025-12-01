@@ -174,11 +174,9 @@ const SalesTab: React.FC = () => {
     setDate(new Date().toISOString().split('T')[0]);
   };
 
-  const totalRevenue = filteredSales.reduce((acc, curr) => acc + curr.totalValue, 0);
-
   // Filter sales based on search and date
   const filteredSales = React.useMemo(() => {
-    let filtered = sales;
+    let filtered = sales || [];
 
     // Search filter
     if (searchTerm) {
@@ -210,6 +208,9 @@ const SalesTab: React.FC = () => {
 
     return filtered;
   }, [sales, searchTerm, dateFilter]);
+
+  // Calculate total revenue after filteredSales is defined
+  const totalRevenue = filteredSales.reduce((acc, curr) => acc + curr.totalValue, 0);
 
   // Prepare data for chart
   const chartData = React.useMemo(() => {
