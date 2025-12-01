@@ -20,13 +20,13 @@ No painel do Vercel, vá em **Settings > Environment Variables** e adicione:
 
 **Variável 1:**
 - **Key:** `VITE_SUPABASE_URL`
-- **Value:** `https://kenpfnkivygilaknxyql.supabase.co`
+- **Value:** `https://ldwtehzvknruvllylgsr.supabase.co`
 - **Environments:** Marque Production, Preview e Development
 - Clique em **Save**
 
 **Variável 2:**
 - **Key:** `VITE_SUPABASE_ANON_KEY`
-- **Value:** `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtlbnBmbmtpdnlnaWxha254eXFsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ1NzQ3NzEsImV4cCI6MjA4MDE1MDc3MX0.LN8Kig1gxMvydoFv2x4p6nYVqMYKRGfOhaKMDubJDCI`
+- **Value:** `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imxkd3RlaHp2a25ydXZsbHlsZ3NyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ2MTA5OTksImV4cCI6MjA4MDE4Njk5OX0.PQAqVBJuEfH3QosxrcBiYxxbaS7dgSDH0AASAOfP5u8`
 - **Environments:** Marque Production, Preview e Development
 - Clique em **Save**
 
@@ -122,9 +122,33 @@ O Vercel deve detectar automaticamente que é um projeto Vite, mas verifique:
    ```
    Se funcionar localmente, o problema é de configuração no Vercel
 
-## 🔐 Configuração do Supabase no Vercel
+## 🔐 Configuração do Supabase
 
-### 1. Configurar CORS no Supabase
+### 1. Criar Schema no Supabase (PRIMEIRO PASSO)
+
+**IMPORTANTE:** Antes de fazer deploy, você DEVE executar o schema SQL no Supabase:
+
+1. Acesse o [Dashboard do Supabase](https://supabase.com/dashboard)
+2. Selecione seu projeto
+3. Vá em **SQL Editor** (menu lateral)
+4. Clique em **New Query**
+5. Copie TODO o conteúdo do arquivo `supabase-schema.sql` do projeto
+6. Cole no editor SQL
+7. Clique em **Run** (ou pressione Ctrl+Enter)
+8. Aguarde a confirmação de sucesso
+
+**Tabelas que serão criadas:**
+- `users` - Usuários do sistema
+- `inventory` - Controle de estoque
+- `sales` - Vendas
+- `orders` - Encomendas
+- `products` - Produtos
+
+**Verificar se foi criado:**
+- Vá em **Table Editor** no menu lateral
+- Você deve ver todas as 5 tabelas listadas
+
+### 2. Configurar CORS no Supabase
 
 No painel do Supabase:
 1. Vá em **Settings > API**
@@ -132,28 +156,33 @@ No painel do Supabase:
    - `https://seu-projeto.vercel.app`
    - `https://*.vercel.app` (para previews)
 
-### 2. Verificar Row Level Security (RLS)
+### 3. Verificar Row Level Security (RLS)
 
-O schema SQL já configura RLS, mas verifique:
+O schema SQL já configura RLS automaticamente, mas você pode verificar:
 1. Vá em **Authentication > Policies**
-2. Certifique-se de que as políticas permitem acesso anônimo (se necessário)
+2. Certifique-se de que as políticas estão ativas para todas as tabelas
 
-### 3. Verificar Tabelas
+### 4. Atualizar Credenciais no Vercel
 
-Certifique-se de que todas as tabelas foram criadas:
-- `inventory`
-- `sales`
-- `orders`
-- `products`
+Se você mudou de projeto Supabase ou precisa atualizar as credenciais:
+
+1. No Vercel Dashboard, vá em **Settings > Environment Variables**
+2. Encontre `VITE_SUPABASE_URL` e clique em **Edit**
+3. Atualize o valor para: `https://ldwtehzvknruvllylgsr.supabase.co`
+4. Encontre `VITE_SUPABASE_ANON_KEY` e clique em **Edit**
+5. Atualize o valor para: `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imxkd3RlaHp2a25ydXZsbHlsZ3NyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ2MTA5OTksImV4cCI6MjA4MDE4Njk5OX0.PQAqVBJuEfH3QosxrcBiYxxbaS7dgSDH0AASAOfP5u8`
+6. **IMPORTANTE:** Após atualizar, vá em **Deployments** e faça um **Redeploy**
 
 ## 📝 Checklist de Deploy
 
+- [ ] Schema SQL executado no Supabase (SQL Editor)
+- [ ] Tabelas criadas e visíveis no Table Editor do Supabase
 - [ ] Variáveis de ambiente configuradas no Vercel
-- [ ] Build passa sem erros
 - [ ] CORS configurado no Supabase
-- [ ] Tabelas criadas no Supabase
-- [ ] RLS configurado corretamente
+- [ ] RLS configurado corretamente (automático pelo schema)
 - [ ] Testado localmente com `npm run build && npm run preview`
+- [ ] Build passa sem erros no Vercel
+- [ ] Aplicação funcionando no Vercel
 
 ## 🆘 Ainda com Problemas?
 
