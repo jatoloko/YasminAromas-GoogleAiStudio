@@ -1,11 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, Suspense } from 'react';
 import { LayoutDashboard, ShoppingBag, Package, Calculator, Tag, Menu, X, Sparkles } from 'lucide-react';
-import SalesTab from './components/SalesTab';
-import OrdersTab from './components/OrdersTab';
-import InventoryTab from './components/InventoryTab';
-import ConverterTab from './components/ConverterTab';
-import ProductsTab from './components/ProductsTab';
-import AIAssistantTab from './components/AIAssistantTab';
+
+// Lazy load components para reduzir bundle inicial e evitar problemas de inicialização
+const SalesTab = React.lazy(() => import('./components/SalesTab'));
+const OrdersTab = React.lazy(() => import('./components/OrdersTab'));
+const InventoryTab = React.lazy(() => import('./components/InventoryTab'));
+const ConverterTab = React.lazy(() => import('./components/ConverterTab'));
+const ProductsTab = React.lazy(() => import('./components/ProductsTab'));
+const AIAssistantTab = React.lazy(() => import('./components/AIAssistantTab'));
 
 // Enum for Tab management
 enum Tab {
@@ -132,7 +134,16 @@ const App: React.FC = () => {
           </div>
         </header>
         <div className="p-4 md:p-6 lg:p-8">
-          {renderTabContent()}
+          <Suspense fallback={
+            <div className="flex items-center justify-center min-h-[400px]">
+              <div className="flex flex-col items-center gap-4">
+                <div className="w-12 h-12 border-4 border-brand-200 border-t-brand-500 rounded-full animate-spin"></div>
+                <p className="text-gray-600">Carregando...</p>
+              </div>
+            </div>
+          }>
+            {renderTabContent()}
+          </Suspense>
         </div>
       </main>
     </div>

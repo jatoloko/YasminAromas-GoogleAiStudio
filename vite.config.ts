@@ -19,6 +19,7 @@ export default defineConfig(({ mode }) => {
       },
       optimizeDeps: {
         include: ['react', 'react-dom', '@supabase/supabase-js'],
+        exclude: [],
       },
       resolve: {
         alias: {
@@ -28,11 +29,17 @@ export default defineConfig(({ mode }) => {
       build: {
         outDir: 'dist',
         sourcemap: false,
+        target: 'esnext',
+        minify: 'esbuild',
         rollupOptions: {
           output: {
             manualChunks: undefined, // Desabilitar code splitting para evitar problemas de inicialização
           }
-        }
+        },
+        commonjsOptions: {
+          include: [/node_modules/],
+          transformMixedEsModules: true,
+        },
       }
     };
 });
