@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, TrendingUp, DollarSign, Calendar, Trash2, ShoppingCart, Tag, Package, Search } from 'lucide-react';
+import { Plus, TrendingUp, DollarSign, Calendar, Trash2, ShoppingCart, Tag, Package, Search, Loader } from 'lucide-react';
 import { SaleItem, InventoryItem, Product } from '../types';
 import { StorageService } from '../services/storageService';
 import { useToast } from '../contexts/ToastContext';
 import { useAuth } from '../contexts/AuthContext';
 import { generateUUID } from '../utils/uuid';
+import { validateSale } from '../utils/validation';
+import { ListSkeleton } from './Skeleton';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 
 type CartItemType = 'PRODUCT' | 'INVENTORY_ITEM';
@@ -23,11 +25,14 @@ const SalesTab: React.FC = () => {
   const [sales, setSales] = useState<SaleItem[]>([]);
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
   
   // Form State
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [customerName, setCustomerName] = useState('');
   const [totalValue, setTotalValue] = useState<number | ''>('');
+  const [formErrors, setFormErrors] = useState<{ [key: string]: string }>({});
   
   // Cart State
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -43,14 +48,22 @@ const SalesTab: React.FC = () => {
     if (!user?.id) return;
     
     const loadData = async () => {
-      const [salesData, inventoryData, productsData] = await Promise.all([
-        StorageService.getSales(user.id),
-        StorageService.getInventory(user.id),
-        StorageService.getProducts(user.id)
-      ]);
-      setSales(salesData);
-      setInventory(inventoryData);
-      setProducts(productsData);
+      try {
+        setIsLoading(true);
+        const [salesData, inventoryData, productsData] = await Promise.all([
+          StorageService.getSales(user.id),
+          StorageService.getInventory(user.id),
+          StorageService.getProducts(user.id)
+        ]);
+        setSales(salesData);
+        setInventory(inventoryData);
+        setProducts(productsData);
+      } catch (error) {
+        console.error('Erro ao carregar dados:', error);
+        toast.showError('Erro ao carregar vendas');
+      } finally {
+        setIsLoading(false);
+      }
     };
     loadData();
   }, [user?.id]);
@@ -114,8 +127,22 @@ const SalesTab: React.FC = () => {
   };
 
   const handleAddSale = async () => {
-    if (!customerName || !totalValue) {
-      toast.showError("Por favor, preencha o cliente e o valor total.");
+    // Validar campos
+    const newErrors: { [key: string]: string } = {};
+    
+    const customerNameValidation = validateSale.customerName(customerName);
+    if (!customerNameValidation.isValid) {
+      newErrors.customerName = customerNameValidation.error || '';
+    }
+    
+    const totalValueValidation = validateSale.totalValue(totalValue);
+    if (!totalValueValidation.isValid) {
+      newErrors.totalValue = totalValueValidation.error || '';
+    }
+    
+    if (Object.keys(newErrors).length > 0) {
+      setFormErrors(newErrors);
+      toast.showError("Por favor, corrija os erros no formulário.");
       return;
     }
 
@@ -125,6 +152,8 @@ const SalesTab: React.FC = () => {
     }
 
     try {
+      setIsSaving(true);
+      setFormErrors({});
       // 1. Build Product Description String
       let productsDescription = cart.map(c => `${c.quantity}x ${c.name}`).join(', ');
       if (manualProductNotes) {
@@ -199,6 +228,8 @@ const SalesTab: React.FC = () => {
     } catch (error) {
       console.error('❌ Erro ao registrar venda:', error);
       toast.showError(`Erro ao registrar venda: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -394,25 +425,45 @@ const SalesTab: React.FC = () => {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Valor Total (R$)</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Valor Total (R$) <span className="text-red-500">*</span>
+                </label>
                 <input
                   type="number"
                   placeholder="0.00"
-                  className="w-full bg-white text-gray-900 border border-gray-300 p-2 rounded-lg focus:ring-2 focus:ring-brand-400 outline-none"
+                  className={`w-full bg-white text-gray-900 border p-2 rounded-lg focus:ring-2 focus:ring-brand-400 outline-none ${
+                    formErrors.totalValue ? 'border-red-500' : 'border-gray-300'
+                  }`}
                   value={totalValue}
-                  onChange={e => setTotalValue(parseFloat(e.target.value) || '')}
+                  onChange={e => {
+                    setTotalValue(parseFloat(e.target.value) || '');
+                    setFormErrors({ ...formErrors, totalValue: '' });
+                  }}
                 />
+                {formErrors.totalValue && (
+                  <p className="text-red-500 text-xs mt-1">{formErrors.totalValue}</p>
+                )}
               </div>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Cliente</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Cliente <span className="text-red-500">*</span>
+              </label>
               <input
                 type="text"
                 placeholder="Nome do Cliente"
-                className="w-full bg-white text-gray-900 border border-gray-300 p-2 rounded-lg focus:ring-2 focus:ring-brand-400 outline-none"
+                className={`w-full bg-white text-gray-900 border p-2 rounded-lg focus:ring-2 focus:ring-brand-400 outline-none ${
+                  formErrors.customerName ? 'border-red-500' : 'border-gray-300'
+                }`}
                 value={customerName}
-                onChange={e => setCustomerName(e.target.value)}
+                onChange={e => {
+                  setCustomerName(e.target.value);
+                  setFormErrors({ ...formErrors, customerName: '' });
+                }}
               />
+              {formErrors.customerName && (
+                <p className="text-red-500 text-xs mt-1">{formErrors.customerName}</p>
+              )}
             </div>
 
             {/* Product Selection (Stock Deduction) */}
@@ -509,9 +560,18 @@ const SalesTab: React.FC = () => {
 
             <button
               onClick={handleAddSale}
-              className="w-full bg-brand-500 text-white p-3 rounded-lg hover:bg-brand-600 transition-colors font-bold flex items-center justify-center gap-2"
+              disabled={isSaving}
+              className="w-full bg-brand-500 text-white p-3 rounded-lg hover:bg-brand-600 transition-colors font-bold flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
             >
-              <Plus size={20} /> Finalizar Venda
+              {isSaving ? (
+                <>
+                  <Loader size={20} className="animate-spin" /> Salvando...
+                </>
+              ) : (
+                <>
+                  <Plus size={20} /> Finalizar Venda
+                </>
+              )}
             </button>
           </div>
         </div>
@@ -623,43 +683,49 @@ const SalesTab: React.FC = () => {
         <div className="px-6 py-4 border-b border-gray-100">
           <h3 className="text-lg font-bold text-gray-800">Histórico de Vendas {filteredSales.length !== sales.length ? `(${filteredSales.length} de ${sales.length})` : ''}</h3>
         </div>
-        <div className="overflow-x-auto">
-          <table className="min-w-full">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Data</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Cliente</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Produtos</th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Valor</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {filteredSales.slice(0, 10).map((sale) => (
-                <tr key={sale.id} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                    {new Date(sale.date).toLocaleDateString('pt-BR')}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                    {sale.customerName}
-                  </td>
-                  <td className="px-6 py-4 text-sm text-gray-600 max-w-xs truncate">
-                    {sale.products}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-bold text-brand-600">
-                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(sale.totalValue)}
-                  </td>
-                </tr>
-              ))}
-              {filteredSales.length === 0 && (
+        {isLoading ? (
+          <div className="p-6">
+            <ListSkeleton items={5} />
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full">
+              <thead className="bg-gray-50">
                 <tr>
-                  <td colSpan={4} className="px-6 py-8 text-center text-gray-400">
-                    Nenhuma venda registrada ainda.
-                  </td>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Data</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Cliente</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Produtos</th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Valor</th>
                 </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {filteredSales.slice(0, 10).map((sale) => (
+                  <tr key={sale.id} className="hover:bg-gray-50 transition-colors">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                      {new Date(sale.date).toLocaleDateString('pt-BR')}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                      {sale.customerName}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-600 max-w-xs truncate">
+                      {sale.products}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-bold text-brand-600">
+                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(sale.totalValue)}
+                    </td>
+                  </tr>
+                ))}
+                {filteredSales.length === 0 && (
+                  <tr>
+                    <td colSpan={4} className="px-6 py-8 text-center text-gray-400">
+                      Nenhuma venda registrada ainda.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );
