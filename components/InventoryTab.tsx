@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, AlertTriangle, Package } from 'lucide-react';
+import { Plus, Trash2, AlertTriangle, Package, X } from 'lucide-react';
 import { InventoryItem, UnitType } from '../types';
 import { StorageService } from '../services/storageService';
 
@@ -12,6 +12,7 @@ const InventoryTab: React.FC = () => {
     unit: UnitType.KILOGRAMS,
     minThreshold: 1,
   });
+  const [isCustomCategory, setIsCustomCategory] = useState(false);
 
   useEffect(() => {
     setItems(StorageService.getInventory());
@@ -20,19 +21,42 @@ const InventoryTab: React.FC = () => {
   const handleAddItem = () => {
     if (!newItem.name || newItem.quantity === undefined) return;
 
-    const itemToAdd: InventoryItem = {
-      id: Date.now().toString(),
-      name: newItem.name,
-      category: newItem.category || 'Geral',
-      quantity: Number(newItem.quantity),
-      unit: newItem.unit || UnitType.UNITS,
-      minThreshold: Number(newItem.minThreshold) || 0,
-    };
+    const normalizedName = newItem.name.trim();
+    const category = newItem.category || 'Geral';
 
-    const updatedItems = [...items, itemToAdd];
+    // Check if item exists
+    const existingItemIndex = items.findIndex(
+      i => i.name.toLowerCase() === normalizedName.toLowerCase() && i.category === category
+    );
+
+    let updatedItems;
+
+    if (existingItemIndex >= 0) {
+      // Update existing item
+      updatedItems = [...items];
+      updatedItems[existingItemIndex] = {
+        ...updatedItems[existingItemIndex],
+        quantity: updatedItems[existingItemIndex].quantity + Number(newItem.quantity)
+      };
+    } else {
+      // Add new item
+      const itemToAdd: InventoryItem = {
+        id: Date.now().toString(),
+        name: normalizedName,
+        category: category,
+        quantity: Number(newItem.quantity),
+        unit: newItem.unit || UnitType.UNITS,
+        minThreshold: Number(newItem.minThreshold) || 0,
+      };
+      updatedItems = [...items, itemToAdd];
+    }
+
     setItems(updatedItems);
     StorageService.saveInventory(updatedItems);
+    
+    // Reset form
     setNewItem({ name: '', category: 'Cera', quantity: 0, unit: UnitType.KILOGRAMS, minThreshold: 1 });
+    setIsCustomCategory(false);
   };
 
   const handleDeleteItem = (id: string) => {
@@ -42,6 +66,10 @@ const InventoryTab: React.FC = () => {
   };
 
   const getLowStockItems = () => items.filter(i => i.quantity <= i.minThreshold);
+
+  // Dynamic list of categories based on defaults and existing items
+  const defaultCategories = ['Cera', 'Essência', 'Pavio', 'Recipiente', 'Embalagem', 'Outros'];
+  const availableCategories = Array.from(new Set([...defaultCategories, ...items.map(i => i.category)]));
 
   return (
     <div className="space-y-6">
@@ -54,32 +82,63 @@ const InventoryTab: React.FC = () => {
           <input
             type="text"
             placeholder="Nome do Item (ex: Cera de Coco)"
-            className="border border-gray-300 p-2 rounded-lg focus:ring-2 focus:ring-brand-400 outline-none lg:col-span-2"
+            className="bg-white text-gray-900 border border-gray-300 p-2 rounded-lg focus:ring-2 focus:ring-brand-400 outline-none lg:col-span-2"
             value={newItem.name}
             onChange={e => setNewItem({ ...newItem, name: e.target.value })}
           />
-          <select
-            className="border border-gray-300 p-2 rounded-lg focus:ring-2 focus:ring-brand-400 outline-none"
-            value={newItem.category}
-            onChange={e => setNewItem({ ...newItem, category: e.target.value })}
-          >
-            <option value="Cera">Cera</option>
-            <option value="Essência">Essência</option>
-            <option value="Pavio">Pavio</option>
-            <option value="Recipiente">Recipiente</option>
-            <option value="Embalagem">Embalagem</option>
-            <option value="Outros">Outros</option>
-          </select>
+          
+          {/* Category Selection Logic */}
+          {isCustomCategory ? (
+            <div className="flex gap-1">
+              <input
+                type="text"
+                placeholder="Nova Categoria"
+                className="bg-white text-gray-900 border border-gray-300 p-2 rounded-lg focus:ring-2 focus:ring-brand-400 outline-none w-full"
+                value={newItem.category}
+                onChange={e => setNewItem({ ...newItem, category: e.target.value })}
+                autoFocus
+              />
+              <button
+                onClick={() => {
+                  setIsCustomCategory(false);
+                  setNewItem({ ...newItem, category: 'Cera' });
+                }}
+                className="p-2 text-gray-400 hover:text-red-500 transition-colors border border-gray-200 rounded-lg hover:bg-gray-50"
+                title="Cancelar"
+              >
+                <X size={18} />
+              </button>
+            </div>
+          ) : (
+            <select
+              className="bg-white text-gray-900 border border-gray-300 p-2 rounded-lg focus:ring-2 focus:ring-brand-400 outline-none"
+              value={newItem.category}
+              onChange={e => {
+                if (e.target.value === '__NEW__') {
+                  setIsCustomCategory(true);
+                  setNewItem({ ...newItem, category: '' });
+                } else {
+                  setNewItem({ ...newItem, category: e.target.value });
+                }
+              }}
+            >
+              {availableCategories.map(c => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+              <option value="__NEW__" className="font-bold text-brand-600 bg-brand-50">+ Nova Categoria...</option>
+            </select>
+          )}
+
           <div className="flex gap-2">
             <input
               type="number"
               placeholder="Qtd"
-              className="border border-gray-300 p-2 rounded-lg w-full focus:ring-2 focus:ring-brand-400 outline-none"
+              className="bg-white text-gray-900 border border-gray-300 p-2 rounded-lg w-full focus:ring-2 focus:ring-brand-400 outline-none"
               value={newItem.quantity}
               onChange={e => setNewItem({ ...newItem, quantity: parseFloat(e.target.value) })}
             />
             <select
-              className="border border-gray-300 p-2 rounded-lg focus:ring-2 focus:ring-brand-400 outline-none"
+              className="bg-white text-gray-900 border border-gray-300 p-2 rounded-lg focus:ring-2 focus:ring-brand-400 outline-none"
               value={newItem.unit}
               onChange={e => setNewItem({ ...newItem, unit: e.target.value as UnitType })}
             >

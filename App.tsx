@@ -1,132 +1,129 @@
 import React, { useState } from 'react';
-import { LayoutDashboard, ShoppingBag, Package, Calculator, Sparkles, Menu, X } from 'lucide-react';
+import { LayoutDashboard, ShoppingBag, Package, Calculator, Tag, Menu, X } from 'lucide-react';
 import SalesTab from './components/SalesTab';
 import OrdersTab from './components/OrdersTab';
 import InventoryTab from './components/InventoryTab';
 import ConverterTab from './components/ConverterTab';
-import AIAssistantTab from './components/AIAssistantTab';
+import ProductsTab from './components/ProductsTab';
 
 // Enum for Tab management
 enum Tab {
   SALES = 'vendas',
   ORDERS = 'encomendas',
   INVENTORY = 'estoque',
+  PRODUCTS = 'produtos',
   CONVERTER = 'calculadora',
-  AI = 'ia'
 }
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<Tab>(Tab.SALES);
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   const menuItems = [
-    { id: Tab.SALES, label: 'Minhas Vendas', icon: <LayoutDashboard size={20} /> },
-    { id: Tab.ORDERS, label: 'Encomendas', icon: <ShoppingBag size={20} /> },
-    { id: Tab.INVENTORY, label: 'Controle de Estoque', icon: <Package size={20} /> },
-    { id: Tab.CONVERTER, label: 'Calculadora', icon: <Calculator size={20} /> },
-    { id: Tab.AI, label: 'Yasmin IA', icon: <Sparkles size={20} /> },
+    { id: Tab.SALES, label: 'Minhas Vendas', icon: LayoutDashboard },
+    { id: Tab.ORDERS, label: 'Encomendas', icon: ShoppingBag },
+    { id: Tab.INVENTORY, label: 'Controle de Estoque', icon: Package },
+    { id: Tab.PRODUCTS, label: 'Meus Produtos', icon: Tag },
+    { id: Tab.CONVERTER, label: 'Calculadora', icon: Calculator },
   ];
 
-  const renderContent = () => {
+  const renderTabContent = () => {
     switch (activeTab) {
       case Tab.SALES: return <SalesTab />;
       case Tab.ORDERS: return <OrdersTab />;
       case Tab.INVENTORY: return <InventoryTab />;
+      case Tab.PRODUCTS: return <ProductsTab />;
       case Tab.CONVERTER: return <ConverterTab />;
-      case Tab.AI: return <AIAssistantTab />;
       default: return <SalesTab />;
     }
   };
 
-  return (
-    <div className="min-h-screen bg-gray-50 flex flex-col md:flex-row font-sans">
-      {/* Sidebar Navigation (Desktop) */}
-      <aside className="hidden md:flex flex-col w-64 bg-white border-r border-gray-200 h-screen sticky top-0">
-        <div className="p-6 border-b border-gray-100 flex items-center gap-3">
-          <div className="w-10 h-10 bg-brand-100 rounded-full flex items-center justify-center text-brand-600">
-            <Sparkles size={24} />
-          </div>
-          <div>
-            <h1 className="text-xl font-extrabold text-gray-800 tracking-tight">Yasmin<span className="text-brand-500">Aromas</span></h1>
-            <p className="text-xs text-gray-400 font-medium">Gestão Inteligente</p>
-          </div>
+  const SidebarContent = () => (
+    <div className="flex flex-col h-full">
+      <div className="p-6 flex items-center gap-3">
+        <div className="bg-brand-500 p-2 rounded-lg">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 2C13.0524 4.38234 14.3823 5.71228 16.7647 6.76471C14.3823 7.81713 13.0524 9.14708 12 11.5294C10.9476 9.14708 9.61767 7.81713 7.23529 6.76471C9.61767 5.71228 10.9476 4.38234 12 2Z" fill="white"/>
+            <path d="M5 10C5.70161 11.6935 6.69355 12.6855 8.3871 13.3871C6.69355 14.0887 5.70161 15.0806 5 16.7742C4.29839 15.0806 3.30645 14.0887 1.6129 13.3871C3.30645 12.6855 4.29839 11.6935 5 10Z" fill="white"/>
+            <path d="M19 14C19.7016 15.6935 20.6935 16.6855 22.3871 17.3871C20.6935 18.0887 19.7016 19.0806 19 20.7742C18.2984 19.0806 17.3065 18.0887 15.6129 17.3871C17.3065 16.6855 18.2984 15.6935 19 14Z" fill="white"/>
+          </svg>
         </div>
-        
-        <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
+        <div>
+          <h1 className="text-xl font-bold text-brand-800">YasminAromas</h1>
+          <p className="text-sm text-gray-500">Gestão Inteligente</p>
+        </div>
+      </div>
+      <nav className="flex-1 px-4 py-2">
+        <ul className="space-y-2">
           {menuItems.map(item => (
-            <button
-              key={item.id}
-              onClick={() => setActiveTab(item.id)}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-medium ${
-                activeTab === item.id
-                  ? 'bg-brand-50 text-brand-600 shadow-sm'
-                  : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'
-              }`}
-            >
-              <span className={activeTab === item.id ? 'text-brand-500' : 'text-gray-400'}>{item.icon}</span>
-              {item.label}
-            </button>
+            <li key={item.id}>
+              <button
+                onClick={() => {
+                  setActiveTab(item.id);
+                  setIsMenuOpen(false);
+                }}
+                className={`w-full flex items-center gap-3 p-3 rounded-lg text-left transition-colors ${
+                  activeTab === item.id 
+                    ? 'bg-brand-100 text-brand-700 font-bold' 
+                    : 'text-gray-600 hover:bg-brand-50 hover:text-brand-600'
+                }`}
+              >
+                <item.icon className="w-5 h-5" />
+                <span>{item.label}</span>
+              </button>
+            </li>
           ))}
-        </nav>
+        </ul>
+      </nav>
+      <div className="p-4 mt-auto">
+        <p className="text-xs text-center text-gray-400">v1.0.0 • YasminAromas</p>
+      </div>
+    </div>
+  );
 
-        <div className="p-4 border-t border-gray-100 text-center">
-          <p className="text-xs text-gray-400">v1.0.0 • YasminAromas</p>
-        </div>
+  return (
+    <div className="flex h-screen bg-gray-50">
+      {/* Sidebar for Desktop */}
+      <aside className="hidden lg:block w-64 bg-white border-r border-gray-200 flex-shrink-0">
+        <SidebarContent />
       </aside>
 
-      {/* Mobile Header */}
-      <div className="md:hidden bg-white border-b border-gray-200 p-4 flex justify-between items-center sticky top-0 z-20">
-        <div className="flex items-center gap-2">
-          <Sparkles className="text-brand-500" />
-          <h1 className="text-lg font-bold text-gray-800">Yasmin<span className="text-brand-500">Aromas</span></h1>
-        </div>
-        <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="text-gray-600 p-2">
-          {isMobileMenuOpen ? <X /> : <Menu />}
-        </button>
-      </div>
-
-      {/* Mobile Menu Dropdown */}
-      {isMobileMenuOpen && (
-        <div className="md:hidden fixed inset-0 z-10 bg-gray-800 bg-opacity-50" onClick={() => setIsMobileMenuOpen(false)}>
-          <div className="bg-white w-3/4 h-full shadow-xl p-4 flex flex-col" onClick={e => e.stopPropagation()}>
-             <div className="mb-6 flex items-center gap-2 px-2">
-               <Sparkles className="text-brand-500" />
-               <span className="font-bold text-lg">Menu</span>
-             </div>
-             <nav className="space-y-2">
-              {menuItems.map(item => (
-                <button
-                  key={item.id}
-                  onClick={() => {
-                    setActiveTab(item.id);
-                    setIsMobileMenuOpen(false);
-                  }}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium ${
-                    activeTab === item.id
-                      ? 'bg-brand-50 text-brand-600'
-                      : 'text-gray-600'
-                  }`}
-                >
-                  <span className={activeTab === item.id ? 'text-brand-500' : 'text-gray-400'}>{item.icon}</span>
-                  {item.label}
-                </button>
-              ))}
-            </nav>
+      {/* Mobile Menu */}
+      {isMenuOpen && (
+        <div className="fixed inset-0 z-40 flex lg:hidden" role="dialog" aria-modal="true">
+          <div 
+            className="fixed inset-0 bg-gray-600 bg-opacity-75 transition-opacity" 
+            aria-hidden="true"
+            onClick={() => setIsMenuOpen(false)}
+          ></div>
+          <div className="relative flex-1 flex flex-col max-w-xs w-full bg-white">
+            <div className="absolute top-0 right-0 -mr-12 pt-2">
+              <button
+                type="button"
+                className="ml-1 flex items-center justify-center h-10 w-10 rounded-full focus:outline-none focus:ring-2 focus:ring-inset focus:ring-white"
+                onClick={() => setIsMenuOpen(false)}
+              >
+                <span className="sr-only">Close sidebar</span>
+                <X className="h-6 w-6 text-white" aria-hidden="true" />
+              </button>
+            </div>
+            <SidebarContent />
           </div>
         </div>
       )}
 
-      {/* Main Content Area */}
-      <main className="flex-1 p-4 md:p-8 overflow-y-auto max-w-7xl mx-auto w-full">
-        <header className="mb-8 hidden md:block">
-           <h2 className="text-2xl font-bold text-gray-800">
-             {menuItems.find(i => i.id === activeTab)?.label}
-           </h2>
-           <p className="text-gray-500">Gerencie seu negócio de forma simples e eficiente.</p>
+      {/* Main Content */}
+      <main className="flex-1 overflow-y-auto">
+        <header className="sticky top-0 bg-white/80 backdrop-blur-sm z-10 p-4 border-b border-gray-200 flex items-center lg:hidden">
+          <button onClick={() => setIsMenuOpen(true)} className="text-gray-500">
+            <Menu className="h-6 w-6" />
+          </button>
+          <div className="flex-1 text-center">
+            <h1 className="text-lg font-bold text-brand-800">YasminAromas</h1>
+          </div>
         </header>
-        
-        <div className="animate-fade-in">
-          {renderContent()}
+        <div className="p-4 md:p-6 lg:p-8">
+          {renderTabContent()}
         </div>
       </main>
     </div>

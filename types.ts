@@ -22,6 +22,18 @@ export interface InventoryItem {
   minThreshold: number;
 }
 
+export interface ProductRecipeItem {
+  inventoryItemId: string;
+  quantity: number; // Amount of the inventory item used
+}
+
+export interface Product {
+  id: string;
+  name: string;
+  price: number;
+  recipe: ProductRecipeItem[];
+}
+
 export interface SaleItem {
   id: string;
   date: string; // ISO string

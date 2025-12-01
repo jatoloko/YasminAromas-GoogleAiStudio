@@ -82,7 +82,7 @@ const AIAssistantTab: React.FC = () => {
         <div className="flex gap-2 relative">
           <input
             type="text"
-            className="w-full border border-gray-300 rounded-xl pl-4 pr-12 py-3 focus:ring-2 focus:ring-brand-400 outline-none transition-shadow"
+            className="w-full bg-white text-gray-900 border border-gray-300 rounded-xl pl-4 pr-12 py-3 focus:ring-2 focus:ring-brand-400 outline-none transition-shadow"
             placeholder="Peça uma ideia de aroma, legenda para post, ou dica..."
             value={input}
             onChange={e => setInput(e.target.value)}

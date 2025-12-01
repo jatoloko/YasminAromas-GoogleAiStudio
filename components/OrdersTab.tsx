@@ -87,19 +87,19 @@ const OrdersTab: React.FC = () => {
             <input
               type="text"
               placeholder="Nome do Cliente"
-              className="border border-gray-300 p-2 rounded-lg focus:ring-2 focus:ring-brand-400 outline-none"
+              className="bg-white text-gray-900 border border-gray-300 p-2 rounded-lg focus:ring-2 focus:ring-brand-400 outline-none"
               value={newOrder.customerName}
               onChange={e => setNewOrder({ ...newOrder, customerName: e.target.value })}
             />
             <input
               type="date"
-              className="border border-gray-300 p-2 rounded-lg focus:ring-2 focus:ring-brand-400 outline-none"
+              className="bg-white text-gray-900 border border-gray-300 p-2 rounded-lg focus:ring-2 focus:ring-brand-400 outline-none"
               value={newOrder.deadline?.split('T')[0]}
               onChange={e => setNewOrder({ ...newOrder, deadline: e.target.value })}
             />
             <textarea
               placeholder="Descrição do Pedido (ex: 50 velas mini para lembrancinha)"
-              className="border border-gray-300 p-2 rounded-lg focus:ring-2 focus:ring-brand-400 outline-none md:col-span-2"
+              className="bg-white text-gray-900 border border-gray-300 p-2 rounded-lg focus:ring-2 focus:ring-brand-400 outline-none md:col-span-2"
               rows={3}
               value={newOrder.description}
               onChange={e => setNewOrder({ ...newOrder, description: e.target.value })}
@@ -109,7 +109,7 @@ const OrdersTab: React.FC = () => {
               <input
                 type="number"
                 placeholder="0.00"
-                className="border border-gray-300 p-2 rounded-lg focus:ring-2 focus:ring-brand-400 outline-none flex-1"
+                className="bg-white text-gray-900 border border-gray-300 p-2 rounded-lg focus:ring-2 focus:ring-brand-400 outline-none flex-1"
                 value={newOrder.estimatedValue || ''}
                 onChange={e => setNewOrder({ ...newOrder, estimatedValue: parseFloat(e.target.value) })}
               />

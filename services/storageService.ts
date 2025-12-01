@@ -1,9 +1,10 @@
-import { InventoryItem, SaleItem, Order } from '../types';
+import { InventoryItem, SaleItem, Order, Product } from '../types';
 
 const KEYS = {
   INVENTORY: 'yasmin_inventory',
   SALES: 'yasmin_sales',
   ORDERS: 'yasmin_orders',
+  PRODUCTS: 'yasmin_products',
 };
 
 // Generic helper to get data
@@ -35,4 +36,7 @@ export const StorageService = {
 
   getOrders: (): Order[] => getData(KEYS.ORDERS, []),
   saveOrders: (items: Order[]) => setData(KEYS.ORDERS, items),
+
+  getProducts: (): Product[] => getData(KEYS.PRODUCTS, []),
+  saveProducts: (items: Product[]) => setData(KEYS.PRODUCTS, items),
 };
