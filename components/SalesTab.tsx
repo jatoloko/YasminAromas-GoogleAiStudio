@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, TrendingUp, DollarSign, Calendar, Trash2, ShoppingCart, Tag, Package } from 'lucide-react';
+import { Plus, TrendingUp, DollarSign, Calendar, Trash2, ShoppingCart, Tag, Package, Search } from 'lucide-react';
 import { SaleItem, InventoryItem, Product } from '../types';
 import { StorageService } from '../services/storageService';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { useToast } from '../contexts/ToastContext';
+import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 
 type CartItemType = 'PRODUCT' | 'INVENTORY_ITEM';
 
@@ -15,6 +16,7 @@ interface CartItem {
 }
 
 const SalesTab: React.FC = () => {
+  const toast = useToast();
   const [sales, setSales] = useState<SaleItem[]>([]);
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -30,11 +32,22 @@ const SalesTab: React.FC = () => {
   const [selectedId, setSelectedId] = useState('');
   const [qtyToAdd, setQtyToAdd] = useState(1);
   const [manualProductNotes, setManualProductNotes] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [dateFilter, setDateFilter] = useState<string>('all');
+  const [periodFilter, setPeriodFilter] = useState<string>('week');
 
   useEffect(() => {
-    setSales(StorageService.getSales());
-    setInventory(StorageService.getInventory());
-    setProducts(StorageService.getProducts());
+    const loadData = async () => {
+      const [salesData, inventoryData, productsData] = await Promise.all([
+        StorageService.getSales(),
+        StorageService.getInventory(),
+        StorageService.getProducts()
+      ]);
+      setSales(salesData);
+      setInventory(inventoryData);
+      setProducts(productsData);
+    };
+    loadData();
   }, []);
 
   // Update total value whenever cart changes
@@ -95,9 +108,9 @@ const SalesTab: React.FC = () => {
     setCart(cart.filter((_, i) => i !== index));
   };
 
-  const handleAddSale = () => {
+  const handleAddSale = async () => {
     if (!customerName || !totalValue) {
-      alert("Por favor, preencha o cliente e o valor total.");
+      toast.showError("Por favor, preencha o cliente e o valor total.");
       return;
     }
 
@@ -110,7 +123,7 @@ const SalesTab: React.FC = () => {
 
     // 2. Deduct from Stock logic
     if (cart.length > 0) {
-      const currentInventory = [...StorageService.getInventory()]; // Copy to mutate
+      const currentInventory = [...inventory]; // Copy to mutate
       
       cart.forEach(cartItem => {
         if (cartItem.type === 'INVENTORY_ITEM') {
@@ -135,7 +148,7 @@ const SalesTab: React.FC = () => {
         }
       });
 
-      StorageService.saveInventory(currentInventory);
+      await StorageService.saveInventory(currentInventory);
       setInventory(currentInventory); 
     }
 
@@ -150,7 +163,8 @@ const SalesTab: React.FC = () => {
 
     const updatedSales = [saleToAdd, ...sales];
     setSales(updatedSales);
-    StorageService.saveSales(updatedSales);
+    await StorageService.saveSales(updatedSales);
+    toast.showSuccess('Venda registrada com sucesso!');
 
     // 4. Reset Form
     setCustomerName('');
@@ -160,12 +174,47 @@ const SalesTab: React.FC = () => {
     setDate(new Date().toISOString().split('T')[0]);
   };
 
-  const totalRevenue = sales.reduce((acc, curr) => acc + curr.totalValue, 0);
+  const totalRevenue = filteredSales.reduce((acc, curr) => acc + curr.totalValue, 0);
+
+  // Filter sales based on search and date
+  const filteredSales = React.useMemo(() => {
+    let filtered = sales;
+
+    // Search filter
+    if (searchTerm) {
+      filtered = filtered.filter(sale =>
+        sale.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        sale.products.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    }
+
+    // Date filter
+    if (dateFilter !== 'all') {
+      const now = new Date();
+      filtered = filtered.filter(sale => {
+        const saleDate = new Date(sale.date);
+        switch (dateFilter) {
+          case 'today':
+            return saleDate.toDateString() === now.toDateString();
+          case 'week':
+            const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+            return saleDate >= weekAgo;
+          case 'month':
+            const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+            return saleDate >= monthAgo;
+          default:
+            return true;
+        }
+      });
+    }
+
+    return filtered;
+  }, [sales, searchTerm, dateFilter]);
 
   // Prepare data for chart
   const chartData = React.useMemo(() => {
     const data: Record<string, number> = {};
-    sales.forEach(sale => {
+    filteredSales.forEach(sale => {
       const date = sale.date.split('T')[0];
       data[date] = (data[date] || 0) + sale.totalValue;
     });
@@ -173,12 +222,70 @@ const SalesTab: React.FC = () => {
       .map(([date, amount]) => ({ date: date.split('-').slice(1).join('/'), amount }))
       .sort((a, b) => a.date.localeCompare(b.date))
       .slice(-7);
-  }, [sales]);
+  }, [filteredSales]);
+
+  // Calculate period metrics
+  const periodMetrics = React.useMemo(() => {
+    const now = new Date();
+    let periodStart: Date;
+    
+    switch (periodFilter) {
+      case 'week':
+        periodStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        break;
+      case 'month':
+        periodStart = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        break;
+      case 'year':
+        periodStart = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+        break;
+      default:
+        periodStart = new Date(0);
+    }
+
+    const periodSales = filteredSales.filter(sale => new Date(sale.date) >= periodStart);
+    const periodRevenue = periodSales.reduce((acc, curr) => acc + curr.totalValue, 0);
+    const previousPeriodStart = new Date(periodStart.getTime() - (now.getTime() - periodStart.getTime()));
+    const previousPeriodSales = filteredSales.filter(sale => {
+      const saleDate = new Date(sale.date);
+      return saleDate >= previousPeriodStart && saleDate < periodStart;
+    });
+    const previousPeriodRevenue = previousPeriodSales.reduce((acc, curr) => acc + curr.totalValue, 0);
+    
+    const growth = previousPeriodRevenue > 0 
+      ? ((periodRevenue - previousPeriodRevenue) / previousPeriodRevenue) * 100 
+      : 0;
+
+    return {
+      periodRevenue,
+      previousPeriodRevenue,
+      growth,
+      periodSalesCount: periodSales.length,
+    };
+  }, [filteredSales, periodFilter]);
+
+  // Top products (simplified - based on product names in sales)
+  const topProducts = React.useMemo(() => {
+    const productCounts: Record<string, number> = {};
+    filteredSales.forEach(sale => {
+      const products = sale.products.split(',').map(p => p.trim());
+      products.forEach(product => {
+        // Extract product name (remove quantity prefix like "2x ")
+        const productName = product.replace(/^\d+x\s*/, '');
+        productCounts[productName] = (productCounts[productName] || 0) + 1;
+      });
+    });
+    
+    return Object.entries(productCounts)
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 5);
+  }, [filteredSales]);
 
   return (
     <div className="space-y-6">
       {/* Metrics Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white p-6 rounded-xl shadow-sm border border-brand-100 flex items-center">
           <div className="bg-brand-100 p-3 rounded-full mr-4">
             <DollarSign className="text-brand-600 w-6 h-6" />
@@ -196,7 +303,21 @@ const SalesTab: React.FC = () => {
           </div>
           <div>
             <p className="text-sm text-gray-500 font-medium">Total de Vendas</p>
-            <p className="text-2xl font-bold text-gray-800">{sales.length}</p>
+            <p className="text-2xl font-bold text-gray-800">{filteredSales.length}</p>
+          </div>
+        </div>
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-brand-100 flex items-center">
+          <div className="bg-green-100 p-3 rounded-full mr-4">
+            <DollarSign className="text-green-600 w-6 h-6" />
+          </div>
+          <div>
+            <p className="text-sm text-gray-500 font-medium">Faturamento do Período</p>
+            <p className="text-2xl font-bold text-gray-800">
+              {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(periodMetrics.periodRevenue)}
+            </p>
+            <p className={`text-xs ${periodMetrics.growth >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+              {periodMetrics.growth >= 0 ? '↑' : '↓'} {Math.abs(periodMetrics.growth).toFixed(1)}% vs período anterior
+            </p>
           </div>
         </div>
         <div className="bg-white p-6 rounded-xl shadow-sm border border-brand-100 flex items-center">
@@ -206,13 +327,29 @@ const SalesTab: React.FC = () => {
           <div>
             <p className="text-sm text-gray-500 font-medium">Última Venda</p>
             <p className="text-lg font-bold text-gray-800">
-              {sales.length > 0 ? new Date(sales[0].date).toLocaleDateString('pt-BR') : '-'}
+              {filteredSales.length > 0 ? new Date(filteredSales[0].date).toLocaleDateString('pt-BR') : '-'}
             </p>
           </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* Period Filter */}
+      <div className="bg-white p-4 rounded-xl shadow-sm border border-brand-100">
+        <div className="flex items-center gap-4">
+          <label className="text-sm font-medium text-gray-700">Período de Análise:</label>
+          <select
+            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-400 outline-none"
+            value={periodFilter}
+            onChange={e => setPeriodFilter(e.target.value)}
+          >
+            <option value="week">Últimos 7 dias</option>
+            <option value="month">Últimos 30 dias</option>
+            <option value="year">Últimos 12 meses</option>
+          </select>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-6">
         {/* Input Form */}
         <div className="bg-white p-6 rounded-xl shadow-sm border border-brand-100 h-fit">
           <h2 className="text-xl font-bold text-gray-800 mb-4">Registrar Venda</h2>
@@ -350,36 +487,112 @@ const SalesTab: React.FC = () => {
           </div>
         </div>
 
-        {/* Chart */}
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-brand-100 flex flex-col">
-          <h2 className="text-xl font-bold text-gray-800 mb-4">Visão Geral de Vendas</h2>
-          <div className="h-[300px] w-full">
-            {chartData.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#eee" />
-                  <XAxis dataKey="date" stroke="#888" fontSize={12} tickLine={false} axisLine={false} />
-                  <YAxis stroke="#888" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => `R$${value}`} />
-                  <Tooltip
-                    cursor={{ fill: 'transparent' }}
-                    contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                  />
-                  <Bar dataKey="amount" fill="#f43f5e" radius={[4, 4, 0, 0]} barSize={40} />
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="h-full flex items-center justify-center text-gray-400">
-                Sem dados suficientes para o gráfico.
+        {/* Charts */}
+        <div className="space-y-6">
+          {/* Line Chart */}
+          <div className="bg-white p-6 rounded-xl shadow-sm border border-brand-100 flex flex-col">
+            <h2 className="text-xl font-bold text-gray-800 mb-4">Tendência de Vendas</h2>
+            <div className="h-[300px] w-full">
+              {chartData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={chartData}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#eee" />
+                    <XAxis dataKey="date" stroke="#888" fontSize={12} tickLine={false} axisLine={false} />
+                    <YAxis stroke="#888" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => `R$${value}`} />
+                    <Tooltip
+                      cursor={{ stroke: '#f43f5e', strokeWidth: 1 }}
+                      contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                    />
+                    <Line type="monotone" dataKey="amount" stroke="#f43f5e" strokeWidth={2} dot={{ fill: '#f43f5e', r: 4 }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-full flex items-center justify-center text-gray-400">
+                  Sem dados suficientes para o gráfico.
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Bar Chart */}
+          <div className="bg-white p-6 rounded-xl shadow-sm border border-brand-100 flex flex-col">
+            <h2 className="text-xl font-bold text-gray-800 mb-4">Vendas por Data</h2>
+            <div className="h-[300px] w-full">
+              {chartData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={chartData}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#eee" />
+                    <XAxis dataKey="date" stroke="#888" fontSize={12} tickLine={false} axisLine={false} />
+                    <YAxis stroke="#888" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => `R$${value}`} />
+                    <Tooltip
+                      cursor={{ fill: 'transparent' }}
+                      contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                    />
+                    <Bar dataKey="amount" fill="#f43f5e" radius={[4, 4, 0, 0]} barSize={40} />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-full flex items-center justify-center text-gray-400">
+                  Sem dados suficientes para o gráfico.
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Top Products */}
+          <div className="bg-white p-6 rounded-xl shadow-sm border border-brand-100">
+            <h2 className="text-xl font-bold text-gray-800 mb-4">Produtos Mais Vendidos</h2>
+            {topProducts.length > 0 ? (
+              <div className="space-y-3">
+                {topProducts.map((product, index) => (
+                  <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-full bg-brand-100 flex items-center justify-center text-brand-600 font-bold text-sm">
+                        {index + 1}
+                      </div>
+                      <span className="font-medium text-gray-800">{product.name}</span>
+                    </div>
+                    <span className="text-brand-600 font-bold">{product.count} vendas</span>
+                  </div>
+                ))}
               </div>
+            ) : (
+              <p className="text-gray-400 text-center py-4">Sem dados de produtos vendidos.</p>
             )}
           </div>
+        </div>
+      </div>
+
+      {/* Search and Filters */}
+      <div className="bg-white p-4 rounded-xl shadow-sm border border-brand-100">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+            <input
+              type="text"
+              placeholder="Buscar por cliente ou produtos..."
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-400 outline-none"
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+            />
+          </div>
+          <select
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-400 outline-none"
+            value={dateFilter}
+            onChange={e => setDateFilter(e.target.value)}
+          >
+            <option value="all">Todas as datas</option>
+            <option value="today">Hoje</option>
+            <option value="week">Últimos 7 dias</option>
+            <option value="month">Últimos 30 dias</option>
+          </select>
         </div>
       </div>
 
       {/* Recent Sales List */}
       <div className="bg-white rounded-xl shadow-sm border border-brand-100 overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-100">
-          <h3 className="text-lg font-bold text-gray-800">Histórico de Vendas Recentes</h3>
+          <h3 className="text-lg font-bold text-gray-800">Histórico de Vendas {filteredSales.length !== sales.length ? `(${filteredSales.length} de ${sales.length})` : ''}</h3>
         </div>
         <div className="overflow-x-auto">
           <table className="min-w-full">
@@ -392,7 +605,7 @@ const SalesTab: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {sales.slice(0, 10).map((sale) => (
+              {filteredSales.slice(0, 10).map((sale) => (
                 <tr key={sale.id} className="hover:bg-gray-50 transition-colors">
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
                     {new Date(sale.date).toLocaleDateString('pt-BR')}
@@ -408,7 +621,7 @@ const SalesTab: React.FC = () => {
                   </td>
                 </tr>
               ))}
-              {sales.length === 0 && (
+              {filteredSales.length === 0 && (
                 <tr>
                   <td colSpan={4} className="px-6 py-8 text-center text-gray-400">
                     Nenhuma venda registrada ainda.

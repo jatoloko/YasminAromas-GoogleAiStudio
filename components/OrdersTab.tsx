@@ -1,11 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Clock, CheckCircle, Package, Truck, Trash2 } from 'lucide-react';
+import { Plus, Clock, CheckCircle, Package, Truck, Trash2, Edit2, Search } from 'lucide-react';
 import { Order, OrderStatus } from '../types';
 import { StorageService } from '../services/storageService';
+import { useToast } from '../contexts/ToastContext';
 
 const OrdersTab: React.FC = () => {
+  const toast = useToast();
   const [orders, setOrders] = useState<Order[]>([]);
   const [showForm, setShowForm] = useState(false);
+  const [editingOrder, setEditingOrder] = useState<Order | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
   const [newOrder, setNewOrder] = useState<Partial<Order>>({
     customerName: '',
     description: '',
@@ -15,24 +20,73 @@ const OrdersTab: React.FC = () => {
   });
 
   useEffect(() => {
-    setOrders(StorageService.getOrders());
+    const loadData = async () => {
+      const data = await StorageService.getOrders();
+      setOrders(data);
+    };
+    loadData();
   }, []);
 
-  const handleAddOrder = () => {
+  const handleAddOrder = async () => {
     if (!newOrder.customerName || !newOrder.description) return;
 
-    const orderToAdd: Order = {
-      id: Date.now().toString(),
-      customerName: newOrder.customerName,
-      description: newOrder.description,
-      deadline: newOrder.deadline || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-      status: newOrder.status || OrderStatus.PENDING,
-      estimatedValue: Number(newOrder.estimatedValue) || 0,
-    };
+    let updatedOrders: Order[];
 
-    const updatedOrders = [...orders, orderToAdd];
+    if (editingOrder) {
+      // Update existing order
+      updatedOrders = orders.map(o =>
+        o.id === editingOrder.id
+          ? {
+              id: editingOrder.id,
+              customerName: newOrder.customerName!,
+              description: newOrder.description!,
+              deadline: newOrder.deadline || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+              status: newOrder.status || OrderStatus.PENDING,
+              estimatedValue: Number(newOrder.estimatedValue) || 0,
+            }
+          : o
+      );
+    } else {
+      // Add new order
+      const orderToAdd: Order = {
+        id: Date.now().toString(),
+        customerName: newOrder.customerName,
+        description: newOrder.description,
+        deadline: newOrder.deadline || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+        status: newOrder.status || OrderStatus.PENDING,
+        estimatedValue: Number(newOrder.estimatedValue) || 0,
+      };
+      updatedOrders = [...orders, orderToAdd];
+    }
+
     setOrders(updatedOrders);
-    StorageService.saveOrders(updatedOrders);
+    await StorageService.saveOrders(updatedOrders);
+    toast.showSuccess(editingOrder ? 'Encomenda atualizada com sucesso!' : 'Encomenda criada com sucesso!');
+    setNewOrder({
+      customerName: '',
+      description: '',
+      deadline: '',
+      status: OrderStatus.PENDING,
+      estimatedValue: 0,
+    });
+    setShowForm(false);
+    setEditingOrder(null);
+  };
+
+  const handleEditOrder = (order: Order) => {
+    setEditingOrder(order);
+    setNewOrder({
+      customerName: order.customerName,
+      description: order.description,
+      deadline: order.deadline.split('T')[0],
+      status: order.status,
+      estimatedValue: order.estimatedValue,
+    });
+    setShowForm(true);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingOrder(null);
     setNewOrder({
       customerName: '',
       description: '',
@@ -43,19 +97,20 @@ const OrdersTab: React.FC = () => {
     setShowForm(false);
   };
 
-  const handleUpdateStatus = (id: string, newStatus: OrderStatus) => {
+  const handleUpdateStatus = async (id: string, newStatus: OrderStatus) => {
     const updatedOrders = orders.map(o => o.id === id ? { ...o, status: newStatus } : o);
     setOrders(updatedOrders);
-    StorageService.saveOrders(updatedOrders);
+    await StorageService.saveOrders(updatedOrders);
   };
 
-  const handleDeleteOrder = (e: React.MouseEvent, id: string) => {
+  const handleDeleteOrder = async (e: React.MouseEvent, id: string) => {
     e.preventDefault();
     e.stopPropagation();
     if (window.confirm("Tem certeza que deseja excluir esta encomenda? Esta ação não pode ser desfeita.")) {
       const updatedOrders = orders.filter(o => o.id !== id);
       setOrders(updatedOrders);
-      StorageService.saveOrders(updatedOrders);
+      await StorageService.saveOrders(updatedOrders);
+      toast.showSuccess('Encomenda excluída com sucesso!');
     }
   };
 
@@ -78,21 +133,34 @@ const OrdersTab: React.FC = () => {
     }
   };
 
+  // Filter orders based on search
+  const filteredOrders = orders.filter(order => {
+    const matchesSearch = order.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         order.description.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesStatus = statusFilter === 'all' || order.status === statusFilter;
+    return matchesSearch && matchesStatus;
+  });
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h2 className="text-xl font-bold text-gray-800">Encomendas</h2>
         <button
-          onClick={() => setShowForm(!showForm)}
+          onClick={() => {
+            if (showForm) handleCancelEdit();
+            else setShowForm(true);
+          }}
           className="bg-brand-500 text-white px-4 py-2 rounded-lg hover:bg-brand-600 transition-colors flex items-center gap-2 font-medium"
         >
-          <Plus size={18} /> Nova Encomenda
+          <Plus size={18} /> {showForm ? 'Cancelar' : 'Nova Encomenda'}
         </button>
       </div>
 
       {showForm && (
         <div className="bg-white p-6 rounded-xl shadow-lg border border-brand-100 animate-fade-in-down">
-          <h3 className="font-bold text-lg mb-4 text-gray-800">Detalhes da Encomenda</h3>
+          <h3 className="font-bold text-lg mb-4 text-gray-800">
+            {editingOrder ? 'Editar Encomenda' : 'Detalhes da Encomenda'}
+          </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <input
               type="text"
@@ -134,6 +202,34 @@ const OrdersTab: React.FC = () => {
         </div>
       )}
 
+      {/* Search and Filter */}
+      {!showForm && (
+        <div className="bg-white p-4 rounded-xl shadow-sm border border-brand-100">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+              <input
+                type="text"
+                placeholder="Buscar por cliente ou descrição..."
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-400 outline-none"
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+              />
+            </div>
+            <select
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-400 outline-none"
+              value={statusFilter}
+              onChange={e => setStatusFilter(e.target.value)}
+            >
+              <option value="all">Todos os status</option>
+              {Object.values(OrderStatus).map(status => (
+                <option key={status} value={status}>{status}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {Object.values(OrderStatus).map((status) => (
           <div key={status} className="bg-gray-50 p-4 rounded-xl border border-gray-200 flex flex-col h-full min-h-[300px]">
@@ -143,7 +239,7 @@ const OrdersTab: React.FC = () => {
             </div>
             
             <div className="space-y-3 flex-1">
-              {orders.filter(o => o.status === status).map(order => (
+              {filteredOrders.filter(o => o.status === status).map(order => (
                 <div key={order.id} className="bg-white p-3 rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition-shadow relative">
                   <div className="flex justify-between items-start mb-2">
                     <span className="font-bold text-gray-800 text-sm truncate w-2/3">{order.customerName}</span>
@@ -159,6 +255,18 @@ const OrdersTab: React.FC = () => {
                     </span>
                     
                     <div className="flex items-center gap-1">
+                       <button
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            handleEditOrder(order);
+                          }}
+                          className="text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-full p-2 transition-colors z-10"
+                          title="Editar Encomenda"
+                        >
+                          <Edit2 size={18} />
+                        </button>
                        <button
                           type="button"
                           onClick={(e) => handleDeleteOrder(e, order.id)}
@@ -196,7 +304,7 @@ const OrdersTab: React.FC = () => {
                   </div>
                 </div>
               ))}
-              {orders.filter(o => o.status === status).length === 0 && (
+              {filteredOrders.filter(o => o.status === status).length === 0 && (
                 <div className="text-center py-8 text-gray-300 text-sm italic">
                   Vazio
                 </div>

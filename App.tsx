@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { LayoutDashboard, ShoppingBag, Package, Calculator, Tag, Menu, X } from 'lucide-react';
+import { LayoutDashboard, ShoppingBag, Package, Calculator, Tag, Menu, X, Sparkles } from 'lucide-react';
 import SalesTab from './components/SalesTab';
 import OrdersTab from './components/OrdersTab';
 import InventoryTab from './components/InventoryTab';
 import ConverterTab from './components/ConverterTab';
 import ProductsTab from './components/ProductsTab';
+import AIAssistantTab from './components/AIAssistantTab';
 
 // Enum for Tab management
 enum Tab {
@@ -13,6 +14,7 @@ enum Tab {
   INVENTORY = 'estoque',
   PRODUCTS = 'produtos',
   CONVERTER = 'calculadora',
+  AI_ASSISTANT = 'assistente',
 }
 
 const App: React.FC = () => {
@@ -25,6 +27,7 @@ const App: React.FC = () => {
     { id: Tab.INVENTORY, label: 'Controle de Estoque', icon: Package },
     { id: Tab.PRODUCTS, label: 'Meus Produtos', icon: Tag },
     { id: Tab.CONVERTER, label: 'Calculadora', icon: Calculator },
+    { id: Tab.AI_ASSISTANT, label: 'Assistente IA', icon: Sparkles },
   ];
 
   const renderTabContent = () => {
@@ -34,6 +37,7 @@ const App: React.FC = () => {
       case Tab.INVENTORY: return <InventoryTab />;
       case Tab.PRODUCTS: return <ProductsTab />;
       case Tab.CONVERTER: return <ConverterTab />;
+      case Tab.AI_ASSISTANT: return <AIAssistantTab />;
       default: return <SalesTab />;
     }
   };

@@ -1,12 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, Package, Save, Beaker, X } from 'lucide-react';
+import { Plus, Trash2, Package, Save, Beaker, X, Edit2, Search } from 'lucide-react';
 import { InventoryItem, Product, ProductRecipeItem } from '../types';
 import { StorageService } from '../services/storageService';
+import { useToast } from '../contexts/ToastContext';
 
 const ProductsTab: React.FC = () => {
+  const toast = useToast();
   const [products, setProducts] = useState<Product[]>([]);
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [showForm, setShowForm] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
 
   // New Product Form State
   const [newProductName, setNewProductName] = useState('');
@@ -18,8 +22,15 @@ const ProductsTab: React.FC = () => {
   const [ingredientQty, setIngredientQty] = useState<number | ''>('');
 
   useEffect(() => {
-    setProducts(StorageService.getProducts());
-    setInventory(StorageService.getInventory());
+    const loadData = async () => {
+      const [productsData, inventoryData] = await Promise.all([
+        StorageService.getProducts(),
+        StorageService.getInventory()
+      ]);
+      setProducts(productsData);
+      setInventory(inventoryData);
+    };
+    loadData();
   }, []);
 
   const handleAddIngredient = () => {
@@ -40,35 +51,71 @@ const ProductsTab: React.FC = () => {
     setRecipe(recipe.filter(r => r.inventoryItemId !== id));
   };
 
-  const handleSaveProduct = () => {
+  const handleSaveProduct = async () => {
     if (!newProductName || !newProductPrice) {
       alert("Nome e Preço são obrigatórios.");
       return;
     }
 
-    const newProduct: Product = {
-      id: Date.now().toString(),
-      name: newProductName,
-      price: Number(newProductPrice),
-      recipe: recipe,
-    };
+    let updatedProducts: Product[];
 
-    const updatedProducts = [...products, newProduct];
+    if (editingProduct) {
+      // Update existing product
+      updatedProducts = products.map(p =>
+        p.id === editingProduct.id
+          ? {
+              id: editingProduct.id,
+              name: newProductName,
+              price: Number(newProductPrice),
+              recipe: recipe,
+            }
+          : p
+      );
+    } else {
+      // Add new product
+      const newProduct: Product = {
+        id: Date.now().toString(),
+        name: newProductName,
+        price: Number(newProductPrice),
+        recipe: recipe,
+      };
+      updatedProducts = [...products, newProduct];
+    }
+
     setProducts(updatedProducts);
-    StorageService.saveProducts(updatedProducts);
+    await StorageService.saveProducts(updatedProducts);
+    toast.showSuccess(editingProduct ? 'Produto atualizado com sucesso!' : 'Produto cadastrado com sucesso!');
 
     // Reset Form
     setNewProductName('');
     setNewProductPrice('');
     setRecipe([]);
     setShowForm(false);
+    setEditingProduct(null);
   };
 
-  const handleDeleteProduct = (id: string) => {
+  const handleEditProduct = (product: Product) => {
+    setEditingProduct(product);
+    setNewProductName(product.name);
+    setNewProductPrice(product.price);
+    setRecipe(product.recipe);
+    setShowForm(true);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingProduct(null);
+    setNewProductName('');
+    setNewProductPrice('');
+    setRecipe([]);
+    setShowForm(false);
+  };
+
+  const handleDeleteProduct = async (id: string) => {
     if (confirm("Tem certeza que deseja excluir este produto?")) {
       const updated = products.filter(p => p.id !== id);
       setProducts(updated);
-      StorageService.saveProducts(updated);
+      await StorageService.saveProducts(updated);
+      toast.showSuccess('Produto excluído com sucesso!');
     }
   };
 
@@ -76,6 +123,11 @@ const ProductsTab: React.FC = () => {
     const item = inventory.find(i => i.id === id);
     return item ? `${item.name} (${item.unit})` : 'Item desconhecido';
   };
+
+  // Filter products based on search
+  const filteredProducts = products.filter(product =>
+    product.name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   return (
     <div className="space-y-6">
@@ -98,9 +150,9 @@ const ProductsTab: React.FC = () => {
         <div className="bg-white p-6 rounded-xl shadow-lg border border-brand-100 animate-fade-in-down">
           <div className="flex justify-between items-start mb-4">
             <h3 className="font-bold text-lg text-gray-800 flex items-center gap-2">
-              <Package className="text-brand-500" /> Cadastro de Produto
+              <Package className="text-brand-500" /> {editingProduct ? 'Editar Produto' : 'Cadastro de Produto'}
             </h3>
-            <button onClick={() => setShowForm(false)} className="text-gray-400 hover:text-gray-600">
+            <button onClick={handleCancelEdit} className="text-gray-400 hover:text-gray-600">
               <X size={20} />
             </button>
           </div>
@@ -190,14 +242,35 @@ const ProductsTab: React.FC = () => {
         </div>
       )}
 
+      {/* Search */}
+      {!showForm && (
+        <div className="bg-white p-4 rounded-xl shadow-sm border border-brand-100">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+            <input
+              type="text"
+              placeholder="Buscar produtos..."
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-400 outline-none"
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+            />
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {products.map(product => (
+        {filteredProducts.map(product => (
           <div key={product.id} className="bg-white p-5 rounded-xl shadow-sm border border-brand-100 hover:shadow-md transition-shadow">
             <div className="flex justify-between items-start mb-2">
               <h3 className="font-bold text-gray-800 text-lg">{product.name}</h3>
-              <button onClick={() => handleDeleteProduct(product.id)} className="text-gray-300 hover:text-red-500">
-                <Trash2 size={18} />
-              </button>
+              <div className="flex items-center gap-2">
+                <button onClick={() => handleEditProduct(product)} className="text-gray-300 hover:text-blue-500">
+                  <Edit2 size={18} />
+                </button>
+                <button onClick={() => handleDeleteProduct(product.id)} className="text-gray-300 hover:text-red-500">
+                  <Trash2 size={18} />
+                </button>
+              </div>
             </div>
             <p className="text-brand-600 font-bold text-xl mb-4">
               {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(product.price)}
@@ -220,7 +293,7 @@ const ProductsTab: React.FC = () => {
             </div>
           </div>
         ))}
-        {products.length === 0 && !showForm && (
+        {filteredProducts.length === 0 && !showForm && (
           <div className="col-span-full text-center py-12 bg-white rounded-xl border border-dashed border-gray-300">
             <Package size={48} className="mx-auto text-gray-300 mb-2" />
             <p className="text-gray-500">Nenhum produto cadastrado ainda.</p>
