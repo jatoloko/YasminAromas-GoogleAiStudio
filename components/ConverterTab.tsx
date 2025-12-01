@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Calculator, Plus, Trash2, DollarSign, Package, ArrowRight, Save, RotateCcw } from 'lucide-react';
+import { generateUUID } from '../utils/uuid';
 
 type UnitGroup = 'mass' | 'volume' | 'unit';
 
@@ -71,7 +72,7 @@ const ConverterTab: React.FC = () => {
     if (!materialName || calculatedCost === null) return;
 
     const newItem: MaterialItem = {
-      id: Date.now().toString(),
+      id: generateUUID(),
       name: materialName,
       cost: calculatedCost,
       details: `${usageQty}${usageUnit} (Base: ${purchaseQty}${purchaseUnit} a ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(purchasePrice))})`

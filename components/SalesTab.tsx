@@ -4,6 +4,7 @@ import { SaleItem, InventoryItem, Product } from '../types';
 import { StorageService } from '../services/storageService';
 import { useToast } from '../contexts/ToastContext';
 import { useAuth } from '../contexts/AuthContext';
+import { generateUUID } from '../utils/uuid';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 
 type CartItemType = 'PRODUCT' | 'INVENTORY_ITEM';
@@ -167,7 +168,7 @@ const SalesTab: React.FC = () => {
 
       // 3. Save Sale
       const saleToAdd: SaleItem = {
-        id: Date.now().toString(),
+        id: generateUUID(),
         date: date || new Date().toISOString(),
         customerName,
         products: productsDescription,

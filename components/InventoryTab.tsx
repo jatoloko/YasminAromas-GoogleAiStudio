@@ -4,6 +4,7 @@ import { InventoryItem, UnitType } from '../types';
 import { StorageService } from '../services/storageService';
 import { useToast } from '../contexts/ToastContext';
 import { useAuth } from '../contexts/AuthContext';
+import { generateUUID } from '../utils/uuid';
 
 const InventoryTab: React.FC = () => {
   const toast = useToast();
@@ -54,7 +55,7 @@ const InventoryTab: React.FC = () => {
     } else {
       // Add new item
       const itemToAdd: InventoryItem = {
-        id: Date.now().toString(),
+        id: generateUUID(),
         name: normalizedName,
         category: category,
         quantity: Number(newItem.quantity),

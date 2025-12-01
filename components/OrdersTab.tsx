@@ -4,6 +4,7 @@ import { Order, OrderStatus } from '../types';
 import { StorageService } from '../services/storageService';
 import { useToast } from '../contexts/ToastContext';
 import { useAuth } from '../contexts/AuthContext';
+import { generateUUID } from '../utils/uuid';
 
 const OrdersTab: React.FC = () => {
   const toast = useToast();
@@ -53,7 +54,7 @@ const OrdersTab: React.FC = () => {
     } else {
       // Add new order
       const orderToAdd: Order = {
-        id: Date.now().toString(),
+        id: generateUUID(),
         customerName: newOrder.customerName,
         description: newOrder.description,
         deadline: newOrder.deadline || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),

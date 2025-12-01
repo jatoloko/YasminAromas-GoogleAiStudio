@@ -4,6 +4,7 @@ import { InventoryItem, Product, ProductRecipeItem } from '../types';
 import { StorageService } from '../services/storageService';
 import { useToast } from '../contexts/ToastContext';
 import { useAuth } from '../contexts/AuthContext';
+import { generateUUID } from '../utils/uuid';
 
 const ProductsTab: React.FC = () => {
   const toast = useToast();
@@ -78,7 +79,7 @@ const ProductsTab: React.FC = () => {
     } else {
       // Add new product
       const newProduct: Product = {
-        id: Date.now().toString(),
+        id: generateUUID(),
         name: newProductName,
         price: Number(newProductPrice),
         recipe: recipe,
